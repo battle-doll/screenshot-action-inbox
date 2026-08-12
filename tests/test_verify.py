@@ -394,7 +394,7 @@ class OutputPathTests(unittest.TestCase):
                     verify.publish_bytes(outside, b"payload")
             self.assertFalse(outside.exists())
 
-    def test_plain_dist_publish_replaces_a_regular_file(self):
+    def test_plain_dist_publish_handles_an_existing_regular_file(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             dist = root / "dist"
@@ -402,8 +402,15 @@ class OutputPathTests(unittest.TestCase):
             output = dist / "release.zip"
             output.write_bytes(b"old")
             with mock.patch.multiple(verify, ROOT=root, DIST=dist):
-                verify.publish_bytes(output, b"new")
-            self.assertEqual(output.read_bytes(), b"new")
+                if os.name == "nt":
+                    verify.publish_bytes(output, b"old")
+                    with self.assertRaisesRegex(
+                        verify.VerifyError, "refusing to replace"
+                    ):
+                        verify.publish_bytes(output, b"new")
+                else:
+                    verify.publish_bytes(output, b"new")
+            self.assertEqual(output.read_bytes(), b"old" if os.name == "nt" else b"new")
             self.assertFalse(
                 any(path.name.startswith(".release.zip.tmp-") for path in dist.iterdir())
             )
