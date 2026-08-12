@@ -109,6 +109,7 @@ Timed event:
 - Use an exclusive `end` date for all-day events.
 - Timed values require an explicit UTC offset and are normalized to UTC in `calendar.ics`.
 - If date, time, or timezone is ambiguous, use `{"status":"needs_review"}` and add a question. Such an item is excluded from the ICS draft.
+- Only `action` and `event` items may produce calendar drafts. If both `due` and calendar `start` are present, their canonical strings must match.
 
 ## Unknowns and conflicts
 

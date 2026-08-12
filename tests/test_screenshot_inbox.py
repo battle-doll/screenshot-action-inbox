@@ -143,6 +143,19 @@ class ObservationTests(unittest.TestCase):
         value["items"][1]["status"] = "needs_review"
         with self.assertRaisesRegex(inbox.InboxError, "cannot create"):
             inbox.validate_observations(value)
+        value = load_fixture()
+        value["items"][2]["calendar"] = {
+            "status": "draft",
+            "start": "2026-08-20",
+            "end": None,
+            "location": None,
+        }
+        with self.assertRaisesRegex(inbox.InboxError, "limited"):
+            inbox.validate_observations(value)
+        value = load_fixture()
+        value["items"][1]["due"] = "2026-08-21T18:30:00+09:00"
+        with self.assertRaisesRegex(inbox.InboxError, "must match"):
+            inbox.validate_observations(value)
 
 
 class PathTests(unittest.TestCase):
@@ -154,6 +167,7 @@ class PathTests(unittest.TestCase):
             "/tmp/x.png", "../x.png", "a/../../x.png", "a\\b.png", "C:/x.png",
             "C:\\x.png", "C:x.png", "//server/share/x.png", "safe.txt:$DATA",
             "CON.png", "folder/NUL.json", "folder/trailing. ", "a//b.png",
+            "folder/`code`.png",
         ]
         for value in bad:
             with self.subTest(value=value):
@@ -241,6 +255,7 @@ class CsvAndIcsTests(unittest.TestCase):
             "end": None,
             "location": "Community Hall",
         }
+        event["due"] = "2026-08-20"
         data = inbox.validate_observations(value)
         text = inbox.build_ics(data).decode("utf-8")
         self.assertIn("DTSTART;VALUE=DATE:20260820", text)
@@ -307,6 +322,15 @@ class FilesystemTests(unittest.TestCase):
             self.assertEqual(result["sources"][0]["sha256"], inbox._hash_bytes(payload))
             self.assertFalse(result["exif_read"])
 
+    def test_inventory_redacts_sensitive_filenames(self):
+        with tempfile.TemporaryDirectory(prefix="sai-sensitive-name-") as raw:
+            root = Path(raw)
+            (root / "Card 4111 1111 1111 1111.png").write_bytes(b"synthetic")
+            result = inbox.inventory(root)
+            self.assertEqual(result["sources"], [])
+            self.assertEqual(result["skipped"][0]["reason"], "SENSITIVE_FILENAME")
+            self.assertNotIn("4111", result["skipped"][0]["relative_path"])
+
     def test_inventory_skips_symlink_when_supported(self):
         with tempfile.TemporaryDirectory(prefix="sai-inventory-") as raw:
             root = Path(raw)
@@ -320,6 +344,27 @@ class FilesystemTests(unittest.TestCase):
             result = inbox.inventory(root)
             self.assertEqual(len(result["sources"]), 1)
             self.assertEqual(result["skipped"][0]["reason"], "LINK_OR_REPARSE_POINT")
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction coverage")
+    def test_windows_junction_root_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="sai-junction-") as raw:
+            root = Path(raw)
+            target = root / "target"
+            junction = root / "junction"
+            target.mkdir()
+            result = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(target)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            try:
+                with self.assertRaisesRegex(inbox.InboxError, "reparse"):
+                    inbox.inventory(junction)
+            finally:
+                os.rmdir(str(junction))
 
     def test_dangling_output_links_are_never_replaced(self):
         data = inbox.validate_observations(load_fixture())

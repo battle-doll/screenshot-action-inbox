@@ -258,7 +258,7 @@ def validate_relative_path(value, label="relative_path"):
             raise InboxError("%s contains an overlong segment" % label)
         if any(ord(char) < 32 or ord(char) == 127 for char in part):
             raise InboxError("%s contains a control character" % label)
-        if any(char in part for char in '<>:"|?*'):
+        if any(char in part for char in '<>:"|?*`'):
             raise InboxError("%s contains a cross-platform unsafe character" % label)
         if part.endswith((".", " ")):
             raise InboxError("%s contains a segment ending in dot or space" % label)
@@ -484,6 +484,11 @@ def validate_observations(raw):
             raise InboxError("items needing review cannot create a calendar draft")
         if item["calendar"] and item["calendar"]["status"] == "needs_review" and item["status"] != "needs_review":
             raise InboxError("ambiguous calendar items must use needs_review status")
+        if item["calendar"] and item["calendar"]["status"] == "draft":
+            if item["category"] not in {"action", "event"}:
+                raise InboxError("calendar drafts are limited to action or event items")
+            if item["due"] is not None and item["due"] != item["calendar"]["start"]:
+                raise InboxError("item due and calendar start must match when both are present")
         if (
             any(source_map[source_id]["status"] != "reviewed" for source_id in item["source_ids"])
             and item["status"] != "needs_review"
@@ -592,7 +597,7 @@ def build_digest(data):
                 lines.append("- Duplicate group: `%s`" % item["duplicate_group"])
             if item["calendar"]:
                 lines.append("- Calendar: `%s`" % item["calendar"]["status"])
-            lines.append("- Sources: %s" % ", ".join("`%s`" % _markdown(name) for name in _source_names(item, source_map)))
+            lines.append("- Sources: %s" % ", ".join(_markdown(name) for name in _source_names(item, source_map)))
             lines.append("")
     lines.extend(["## Questions", ""])
     if data["questions"]:
@@ -728,7 +733,12 @@ def build_ics(data):
             for source_id in item["source_ids"]
         ]
         uid_basis = json.dumps(
-            {"item_id": item["id"], "sources": identity_sources},
+            {
+                "batch_generated_at": data["generated_at"],
+                "batch_title": data["batch_title"],
+                "item_id": item["id"],
+                "sources": identity_sources,
+            },
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -977,6 +987,15 @@ def inventory(root, recursive=False, include_hash=False):
                 validate_relative_path(relative, "inventory path")
             except InboxError as exc:
                 skipped.append({"relative_path": relative, "reason": "UNSAFE_PATH: %s" % exc})
+                continue
+            try:
+                _assert_no_sensitive_value(relative, "inventory path")
+            except InboxError:
+                redacted_id = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:12]
+                skipped.append({
+                    "relative_path": "[REDACTED-%s]" % redacted_id,
+                    "reason": "SENSITIVE_FILENAME",
+                })
                 continue
             if entry_stat.st_size > MAX_IMAGE_BYTES:
                 skipped.append({"relative_path": relative, "reason": "FILE_TOO_LARGE"})
