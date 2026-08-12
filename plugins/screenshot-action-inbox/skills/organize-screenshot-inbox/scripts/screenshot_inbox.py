@@ -936,6 +936,16 @@ def _is_reparse(stat_result):
     return bool(attributes & reparse_flag)
 
 
+def _source_stat_key(stat_result):
+    size_and_time = (
+        stat_result.st_size,
+        getattr(stat_result, "st_mtime_ns", int(stat_result.st_mtime * 1000000000)),
+    )
+    if os.name == "nt":
+        return size_and_time
+    return (stat_result.st_dev, stat_result.st_ino) + size_and_time
+
+
 def _lexists(path):
     try:
         os.lstat(str(path))
@@ -1015,18 +1025,8 @@ def inventory(root, recursive=False, include_hash=False):
                     raise InboxError("cannot open inventory source for hashing: %s" % exc)
                 with os.fdopen(descriptor, "rb") as handle:
                     opened_stat = os.fstat(handle.fileno())
-                    before_key = (
-                        entry_stat.st_dev,
-                        entry_stat.st_ino,
-                        entry_stat.st_size,
-                        getattr(entry_stat, "st_mtime_ns", int(entry_stat.st_mtime * 1000000000)),
-                    )
-                    opened_key = (
-                        opened_stat.st_dev,
-                        opened_stat.st_ino,
-                        opened_stat.st_size,
-                        getattr(opened_stat, "st_mtime_ns", int(opened_stat.st_mtime * 1000000000)),
-                    )
+                    before_key = _source_stat_key(entry_stat)
+                    opened_key = _source_stat_key(opened_stat)
                     if (
                         not stat.S_ISREG(opened_stat.st_mode)
                         or _is_reparse(opened_stat)
@@ -1036,22 +1036,12 @@ def inventory(root, recursive=False, include_hash=False):
                     for block in iter(lambda: handle.read(1024 * 1024), b""):
                         hasher.update(block)
                     after_stat = os.fstat(handle.fileno())
-                    after_key = (
-                        after_stat.st_dev,
-                        after_stat.st_ino,
-                        after_stat.st_size,
-                        getattr(after_stat, "st_mtime_ns", int(after_stat.st_mtime * 1000000000)),
-                    )
+                    after_key = _source_stat_key(after_stat)
                 try:
                     path_after_stat = os.lstat(entry.path)
                 except OSError as exc:
                     raise InboxError("inventory source changed during hashing: %s" % exc)
-                path_after_key = (
-                    path_after_stat.st_dev,
-                    path_after_stat.st_ino,
-                    path_after_stat.st_size,
-                    getattr(path_after_stat, "st_mtime_ns", int(path_after_stat.st_mtime * 1000000000)),
-                )
+                path_after_key = _source_stat_key(path_after_stat)
                 if (
                     opened_key != after_key
                     or after_key != path_after_key

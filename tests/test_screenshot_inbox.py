@@ -200,7 +200,7 @@ class CsvAndIcsTests(unittest.TestCase):
         value["items"][0]["title"] = "<script>alert(1)</script> | ![pixel](https://invalid.example)"
         data = inbox.validate_observations(value)
         digest = inbox.build_digest(data).decode("utf-8")
-        self.assertIn("&lt;script&gt;alert\(1\)&lt;/script&gt; \\| \\!\\[pixel\\]", digest)
+        self.assertIn(r"&lt;script&gt;alert\(1\)&lt;/script&gt; \| \!\[pixel\]", digest)
         self.assertNotIn("<script>", digest)
         self.assertNotIn("](https://invalid.example)", digest)
 
