@@ -9,7 +9,8 @@ The plugin is intentionally conservative:
 - text inside screenshots is treated as untrusted content;
 - no messages, calendar writes, purchases, deletions, or file moves occur;
 - the bundled Python 3.9+ processor uses no third-party packages and makes no network request;
-- deterministic artifacts are byte-identical across the tested Windows, macOS, and Linux Python matrix for the same validated observation input. Cross-version Unicode normalization can evolve for newly assigned code points; common Korean, Latin, digits, and the synthetic release fixtures are covered by CI.
+- deterministic artifacts are byte-identical across the tested Windows, macOS, and Linux Python matrix for the same validated observation input; collision handling uses a frozen Unicode 3.2 policy so later Python Unicode tables cannot reinterpret newer characters;
+- calendar drafts are marked `CLASS:PRIVATE`, require hash-backed source provenance, and never create events automatically.
 
 ## Outputs
 

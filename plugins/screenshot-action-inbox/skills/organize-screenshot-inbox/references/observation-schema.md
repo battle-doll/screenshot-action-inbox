@@ -29,6 +29,7 @@ Use this contract between visual inspection and the deterministic report builder
   "id": "src-001",
   "relative_path": "2026-08/IMG_1234.png",
   "capture_date": "2026-08-12",
+  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "archive_recommendation": "review",
   "archive_bucket": "events",
   "status": "reviewed"
@@ -38,6 +39,7 @@ Use this contract between visual inspection and the deterministic report builder
 - `relative_path` must remain relative to the authorized batch root. Absolute paths, `..`, empty segments, links, and control characters are invalid.
 - `capture_date` is `YYYY-MM-DD` or `null`.
 - `capture_date` describes when the screenshot itself was captured, not a date merely visible inside the screenshot. Use `null` when capture provenance is unknown.
+- `sha256` is a lowercase 64-character SHA-256 string or `null`. Generate it only with an explicit `inventory --hash` run. Every source referenced by a calendar draft, and every source proposed for archive, requires this hash.
 - `archive_recommendation`: `keep`, `archive`, or `review`.
 - `archive` is valid only when the source is `reviewed` and `sha256` is present. Run inventory with explicit `--hash` when a hash-backed archive proposal is wanted; otherwise use `review` or `keep`.
 - `archive_bucket`: `actions`, `events`, `receipts`, `references`, `mixed`, or `unknown`.
@@ -110,7 +112,14 @@ Timed event:
 - Timed values require an explicit UTC offset and are normalized to UTC in `calendar.ics`.
 - If date, time, or timezone is ambiguous, use `{"status":"needs_review"}` and add a question. Such an item is excluded from the ICS draft.
 - Only `action` and `event` items may produce calendar drafts. If both `due` and calendar `start` are present, their canonical strings must match.
+- Generated events include `CLASS:PRIVATE`. Their stable UID is derived from the item ID plus sorted source ID/SHA-256 pairs. Editing a title, time, path, or batch metadata keeps the UID stable; changing referenced source content changes it.
+
+## Deterministic text handling
+
+Normalization and path-collision keys use Python's frozen Unicode 3.2 database. Characters assigned after Unicode 3.2 are treated as opaque boundaries, avoiding Python-version-dependent reinterpretation while preserving UTF-8 and modern Korean filenames. C0/C1 control characters and DEL are rejected where they could affect structured output.
 
 ## Unknowns and conflicts
 
 Never encode a guess as a fact. Use `null`, `UNKNOWN` in user-facing text, `needs_review`, or a top-level question. Keep conflicting items distinct until the user resolves them.
+
+`Sources reviewed` counts only source records whose status is `reviewed`. Unreadable, unsupported, or redaction-required sources contribute to `Needs review` and appear in the digest's incomplete-source table.

@@ -6,10 +6,12 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,11 @@ SPEC.loader.exec_module(inbox)
 
 def load_fixture():
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def safe_tempdir(prefix):
+    """Use a link-free parent when a race test mutates directory components."""
+    return tempfile.TemporaryDirectory(prefix=prefix, dir=str(ROOT))
 
 
 class ObservationTests(unittest.TestCase):
@@ -88,6 +95,29 @@ class ObservationTests(unittest.TestCase):
         value["items"][2]["amount"]["value"] = "4111111111111111"
         with self.assertRaisesRegex(inbox.InboxError, "payment-card"):
             inbox.validate_observations(value)
+        value = load_fixture()
+        value["items"][0]["details"] = "Card ４１１１ １１１１ １１１１ １１１１"
+        with self.assertRaisesRegex(inbox.InboxError, "payment-card"):
+            inbox.validate_observations(value)
+        for secret in (
+            "github_pat_11AAaaBBbbCCccDDddEEffGGggHHiiJJkkLLmm",
+            "ASIAABCDEFGHIJKLMNOP",
+        ):
+            value = load_fixture()
+            value["items"][0]["details"] = secret
+            with self.subTest(secret=secret):
+                with self.assertRaisesRegex(inbox.InboxError, "secret"):
+                    inbox.validate_observations(value)
+        value = load_fixture()
+        value["items"][0]["id"] = "sk-abcdefghijklmnop"
+        with self.assertRaisesRegex(inbox.InboxError, "secret"):
+            inbox.validate_observations(value)
+
+    def test_del_control_character_is_rejected(self):
+        value = load_fixture()
+        value["items"][1]["title"] = "Meeting\x7fATTENDEE"
+        with self.assertRaisesRegex(inbox.InboxError, "control character"):
+            inbox.validate_observations(value)
 
     def test_naive_calendar_time_is_rejected(self):
         value = load_fixture()
@@ -120,9 +150,18 @@ class ObservationTests(unittest.TestCase):
     def test_redaction_status_remains_visible_without_secrets(self):
         value = load_fixture()
         value["sources"][2]["status"] = "redaction_required"
+        value["items"] = value["items"][:3]
+        value["questions"] = []
         data = inbox.validate_observations(value)
-        receipt = json.loads(inbox.build_artifacts(data)["receipt.json"])
+        artifacts = inbox.build_artifacts(data)
+        receipt = json.loads(artifacts["receipt.json"])
+        digest = artifacts["weekly-digest.md"].decode("utf-8")
         self.assertIn("SOURCE_REVIEW_INCOMPLETE", receipt["warnings"])
+        self.assertIn("Sources in batch: **3**", digest)
+        self.assertIn("Sources reviewed: **2**", digest)
+        self.assertIn("Needs review: **1**", digest)
+        self.assertIn(r"blurred note\.png", digest)
+        self.assertIn(r"redaction\_required", digest)
 
     def test_archive_requires_reviewed_hashed_source(self):
         value = load_fixture()
@@ -156,6 +195,22 @@ class ObservationTests(unittest.TestCase):
         value["items"][1]["due"] = "2026-08-21T18:30:00+09:00"
         with self.assertRaisesRegex(inbox.InboxError, "must match"):
             inbox.validate_observations(value)
+
+    def test_calendar_draft_requires_hashed_source_identity(self):
+        value = load_fixture()
+        value["sources"][0]["archive_recommendation"] = "keep"
+        value["sources"][0]["sha256"] = None
+        with self.assertRaisesRegex(inbox.InboxError, "calendar drafts require SHA-256"):
+            inbox.validate_observations(value)
+
+    def test_frozen_unicode_normalization_is_runtime_independent(self):
+        value = load_fixture()
+        value["sources"][0]["relative_path"] = "a\u0897\u0323.png"
+        data = inbox.validate_observations(value)
+        plan = inbox.build_archive_plan(data)
+        first = next(entry for entry in plan["entries"] if entry["source_id"] == "src-001")
+        self.assertEqual(first["proposed_destination"], "2026-08/events/a\u0897\u0323.png")
+        self.assertNotEqual(inbox._path_collision_key("\ua7c0.png"), inbox._path_collision_key("\ua7c1.png"))
 
 
 class PathTests(unittest.TestCase):
@@ -224,6 +279,7 @@ class CsvAndIcsTests(unittest.TestCase):
         self.assertIn("DTSTART:20260820T093000Z", text)
         self.assertIn("DTEND:20260820T110000Z", text)
         self.assertIn("DTSTAMP:20260813T000000Z", text)
+        self.assertIn("CLASS:PRIVATE", text)
         self.assertNotIn("METHOD:", text)
         self.assertNotIn("ATTENDEE:", text)
         self.assertNotIn("ORGANIZER:", text)
@@ -267,11 +323,17 @@ class CsvAndIcsTests(unittest.TestCase):
         first_uid = next(line for line in inbox.build_ics(first_data).decode("utf-8").split("\r\n") if line.startswith("UID:"))
         edited = load_fixture()
         edited["items"][1]["title"] = "Edited title"
+        edited["items"][1]["due"] = "2026-08-21T18:30:00+09:00"
+        edited["items"][1]["calendar"]["start"] = "2026-08-21T18:30:00+09:00"
+        edited["items"][1]["calendar"]["end"] = "2026-08-21T20:00:00+09:00"
+        edited["generated_at"] = "2026-08-14T09:00:00+09:00"
+        edited["batch_title"] = "Renamed batch"
+        edited["sources"][0]["relative_path"] = "renamed/source.png"
         edited_data = inbox.validate_observations(edited)
         edited_uid = next(line for line in inbox.build_ics(edited_data).decode("utf-8").split("\r\n") if line.startswith("UID:"))
         self.assertEqual(first_uid, edited_uid)
         unrelated = load_fixture()
-        unrelated["sources"][0]["relative_path"] = "different/source.png"
+        unrelated["sources"][0]["sha256"] = "c" * 64
         unrelated_data = inbox.validate_observations(unrelated)
         unrelated_uid = next(line for line in inbox.build_ics(unrelated_data).decode("utf-8").split("\r\n") if line.startswith("UID:"))
         self.assertNotEqual(first_uid, unrelated_uid)
@@ -312,6 +374,17 @@ class FilesystemTests(unittest.TestCase):
             self.assertFalse(result["image_contents_opened"])
             self.assertFalse(result["exif_read"])
 
+    @unittest.skipUnless(
+        sys.platform == "darwin" and Path("/var").is_symlink(),
+        "macOS root-level /var alias coverage",
+    )
+    def test_macos_tempfile_root_alias_remains_supported(self):
+        with tempfile.TemporaryDirectory(prefix="sai-var-alias-") as raw:
+            root = Path(raw)
+            (root / "screen.png").write_bytes(b"safe")
+            self.assertEqual(len(inbox.inventory(root)["sources"]), 1)
+            self.assertEqual(inbox.write_single_file(root / "inventory.json", b"{}"), "CREATED")
+
     def test_inventory_hashes_only_when_explicit(self):
         with tempfile.TemporaryDirectory(prefix="sai-inventory-hash-") as raw:
             root = Path(raw)
@@ -345,6 +418,165 @@ class FilesystemTests(unittest.TestCase):
             self.assertEqual(len(result["sources"]), 1)
             self.assertEqual(result["skipped"][0]["reason"], "LINK_OR_REPARSE_POINT")
 
+    def test_recursive_inventory_is_descriptor_bound_against_directory_swap(self):
+        if not inbox._secure_inventory_fds_available():
+            self.skipTest("descriptor-bound traversal unavailable")
+        with safe_tempdir("sai-inventory-race-") as raw:
+            root = Path(raw)
+            child = root / "child"
+            outside = root / "outside"
+            child.mkdir()
+            outside.mkdir()
+            (child / "inside.png").write_bytes(b"inside")
+            (outside / "secret.png").write_bytes(b"outside")
+            original_open = inbox.os.open
+            swapped = {"done": False}
+
+            def racing_open(path, flags, *args, **kwargs):
+                if path == "child" and kwargs.get("dir_fd") is not None and not swapped["done"]:
+                    swapped["done"] = True
+                    os.rename(str(child), str(root / "old-child"))
+                    try:
+                        child.symlink_to(outside.name, target_is_directory=True)
+                    except Exception:
+                        os.rename(str(root / "old-child"), str(child))
+                        raise
+                return original_open(path, flags, *args, **kwargs)
+
+            try:
+                with mock.patch.object(inbox.os, "open", side_effect=racing_open):
+                    with self.assertRaisesRegex(inbox.InboxError, "changed before traversal"):
+                        inbox.inventory(root, recursive=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlinks unavailable")
+            self.assertTrue(swapped["done"])
+
+    @unittest.skipIf(os.name == "nt", "Windows uses pinned directory handles")
+    def test_non_windows_recursive_inventory_is_disabled_without_secure_primitives(self):
+        with safe_tempdir("sai-inventory-fallback-") as raw:
+            with mock.patch.object(inbox, "_secure_inventory_fds_available", return_value=False):
+                with self.assertRaisesRegex(inbox.InboxError, "descriptor-bound"):
+                    inbox.inventory(raw, recursive=True)
+
+    def test_all_skipped_inventory_paths_redact_sensitive_components(self):
+        sensitive = "password:supersecret"
+        with safe_tempdir("sai-redacted-skips-") as raw:
+            root = Path(raw)
+            paths = []
+            fifo = root / (sensitive + ".png")
+            if hasattr(os, "mkfifo"):
+                os.mkfifo(str(fifo))
+                paths.append(fifo)
+            unsafe = root / (sensitive + "`unsafe`.png")
+            unsafe.write_bytes(b"x")
+            paths.append(unsafe)
+            large = root / (sensitive + "-large.png")
+            large.write_bytes(b"x")
+            paths.append(large)
+            link = root / (sensitive + "-link.png")
+            try:
+                link.symlink_to(large.name)
+                paths.append(link)
+            except (OSError, NotImplementedError):
+                pass
+            original_stat = inbox.os.stat
+
+            def mixed_stat(path, *args, **kwargs):
+                if path == unsafe.name:
+                    raise PermissionError("stat failed for %s" % sensitive)
+                result = original_stat(path, *args, **kwargs)
+                if path == large.name:
+                    values = list(result)
+                    values[6] = inbox.MAX_IMAGE_BYTES + 1
+                    return os.stat_result(values)
+                return result
+
+            with mock.patch.object(inbox.os, "stat", side_effect=mixed_stat):
+                result = inbox.inventory(root)
+            rendered = json.dumps(result["skipped"], ensure_ascii=False)
+            self.assertNotIn(sensitive, rendered)
+            self.assertTrue(result["skipped"])
+            self.assertTrue(all(row["relative_path"].startswith("[REDACTED-") for row in result["skipped"]))
+
+    def test_fatal_inventory_errors_redact_sensitive_relative_paths(self):
+        sensitive = "password=supersecret.png"
+        with safe_tempdir("sai-redacted-error-") as raw:
+            root = Path(raw)
+            source = root / sensitive
+            source.write_bytes(b"x")
+            original_open = inbox.os.open
+
+            def failing_open(path, flags, *args, **kwargs):
+                if path == sensitive and kwargs.get("dir_fd") is not None:
+                    raise PermissionError("failed path %s" % sensitive)
+                return original_open(path, flags, *args, **kwargs)
+
+            actual_sensitive_check = inbox._assert_no_sensitive_value
+            checks = {"count": 0}
+
+            def allow_validation_then_redact(text, label):
+                checks["count"] += 1
+                if checks["count"] == 1:
+                    return None
+                return actual_sensitive_check(text, label)
+
+            with mock.patch.object(inbox.os, "open", side_effect=failing_open), \
+                    mock.patch.object(
+                        inbox, "_assert_no_sensitive_value", side_effect=allow_validation_then_redact
+                    ):
+                with self.assertRaises(inbox.InboxError) as captured:
+                    inbox.inventory(root, include_hash=True)
+            self.assertNotIn("supersecret", str(captured.exception))
+
+    def test_inventory_and_outputs_reject_intermediate_symlinks(self):
+        data = inbox.validate_observations(load_fixture())
+        artifacts = inbox.build_artifacts(data)
+        with safe_tempdir("sai-intermediate-link-") as raw:
+            root = Path(raw)
+            real = root / "real"
+            real.mkdir()
+            alias = root / "alias"
+            try:
+                alias.symlink_to(real.name, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlinks unavailable")
+            nested = alias / "nested"
+            with self.assertRaisesRegex(inbox.InboxError, "non-link"):
+                inbox.inventory(alias)
+            with self.assertRaisesRegex(inbox.InboxError, "non-link"):
+                inbox.write_single_file(alias / "inventory.json", b"data")
+            with self.assertRaisesRegex(inbox.InboxError, "non-link"):
+                inbox.write_artifacts(nested, artifacts)
+            self.assertFalse((real / "inventory.json").exists())
+            self.assertFalse((real / "nested").exists())
+
+    def test_hash_identity_requires_more_than_size_and_mtime(self):
+        first = os.stat_result((stat.S_IFREG | 0o600, 11, 22, 1, 1, 1, 4, 8, 9, 10))
+        second = os.stat_result((stat.S_IFREG | 0o600, 12, 22, 1, 1, 1, 4, 8, 9, 10))
+        self.assertNotEqual(inbox._source_stat_key(first), inbox._source_stat_key(second))
+
+    def test_windows_hash_reopens_and_compares_stable_handle_identity(self):
+        with safe_tempdir("sai-windows-identity-") as raw:
+            root = Path(raw)
+            source = root / "screen.png"
+            source.write_bytes(b"safe")
+            descriptors = []
+            real_open = os.open
+
+            def fake_windows_open(path):
+                descriptors.append(real_open(str(path), os.O_RDONLY))
+                identity = (7, 101) if len(descriptors) == 1 else (7, 202)
+                return descriptors[-1], identity
+
+            with mock.patch.object(inbox, "_secure_inventory_fds_available", return_value=False), \
+                    mock.patch.object(inbox, "_is_windows_platform", return_value=True), \
+                    mock.patch.object(
+                        inbox, "_open_windows_directory_locks", return_value=(None, [], None)
+                    ), \
+                    mock.patch.object(inbox, "_open_windows_inventory_file", side_effect=fake_windows_open):
+                with self.assertRaisesRegex(inbox.InboxError, "identity changed"):
+                    inbox.inventory(root, include_hash=True)
+
     @unittest.skipUnless(os.name == "nt", "Windows junction coverage")
     def test_windows_junction_root_is_rejected(self):
         with tempfile.TemporaryDirectory(prefix="sai-junction-") as raw:
@@ -365,6 +597,39 @@ class FilesystemTests(unittest.TestCase):
                     inbox.inventory(junction)
             finally:
                 os.rmdir(str(junction))
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle-bound recursion coverage")
+    def test_windows_recursive_inventory_uses_pinned_directory_handles(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-recursive-") as raw:
+            root = Path(raw)
+            nested = root / "nested"
+            nested.mkdir()
+            (nested / "screen.png").write_bytes(b"safe")
+            calls = []
+            real_locks = inbox._open_windows_directory_locks
+
+            def tracing_locks(path, label):
+                calls.append((Path(path).name, label))
+                return real_locks(path, label)
+
+            with mock.patch.object(
+                inbox, "_open_windows_directory_locks", side_effect=tracing_locks
+            ):
+                result = inbox.inventory(root, recursive=True, include_hash=True)
+            self.assertEqual([row["relative_path"] for row in result["sources"]], ["nested/screen.png"])
+            self.assertIn((root.name, "inventory root"), calls)
+            self.assertIn(("nested", "inventory directory"), calls)
+
+    @unittest.skipUnless(os.name == "nt", "Windows stable handle identity coverage")
+    def test_windows_inventory_handle_identity_is_stable_for_real_file(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-handle-") as raw:
+            source = Path(raw) / "screen.png"
+            source.write_bytes(b"safe")
+            first_fd, first_identity = inbox._open_windows_inventory_file(source)
+            os.close(first_fd)
+            second_fd, second_identity = inbox._open_windows_inventory_file(source)
+            os.close(second_fd)
+            self.assertEqual(first_identity, second_identity)
 
     def test_dangling_output_links_are_never_replaced(self):
         data = inbox.validate_observations(load_fixture())

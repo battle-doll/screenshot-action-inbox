@@ -19,14 +19,14 @@ Trust boundaries are:
 | --- | --- |
 | Screenshot prompt injection | Treat visible text, links, QR codes, filenames, and metadata as quoted untrusted content; never follow them as instructions. |
 | Cross-image disclosure | Preserve per-source provenance and correlate sources only for the user's stated goal. |
-| Secret or sensitive-data leakage | Minimize evidence; reject common secrets and full payment-card patterns; require redaction when necessary. |
+| Secret or sensitive-data leakage | Minimize evidence; reject common secrets and full payment-card patterns after compatibility normalization; redact sensitive skipped filenames and require redaction when necessary. |
 | Hallucinated dates or claims | Require visible evidence, confidence, explicit offset for timed events, and `UNKNOWN`/`needs_review` for ambiguity. |
-| Path traversal and link escape | Use lexical Windows/POSIX validation, reject links/reparse points, and never execute archive paths. |
+| Path traversal, link escape, and path-swap races | Validate every path component; use descriptor-bound POSIX traversal and pinned Windows handles; reject links/reparse points; recheck file identity; never execute archive paths. |
 | CSV formula injection | Prefix dangerous user-controlled text cells; validate numeric amount fields separately. |
-| ICS property injection | Escape values, emit an allowlisted VEVENT subset, use CRLF and octet-aware folding, and omit attendees, organizers, alarms, URLs, and METHOD. |
+| ICS property injection or disclosure | Escape values, reject controls, emit a private allowlisted VEVENT subset, use CRLF and octet-aware folding, and omit attendees, organizers, alarms, URLs, and METHOD. |
 | Archive damage | Emit `PLAN_ONLY`, `dry_run: true`, `executed: false`; include no executor or shell command. |
 | Hostile JSON | Reject duplicate keys, unknown fields, non-finite values, excessive size/depth/counts, wrong types, invalid IDs, and missing provenance. |
-| Partial or nondeterministic output | Stage a complete new output directory, use canonical serialization, content-derived IDs, explicit time input, and no ambient randomness in final artifacts. |
+| Partial or nondeterministic output | Stage a complete new output directory, use canonical serialization, source-hash-derived calendar IDs, explicit time input, a frozen Unicode policy, and no ambient randomness in final artifacts. |
 | Privilege drift | Ship Skills only; adding MCP, hooks, apps, network, or external writes requires a new security review and release. |
 
 ## Residual risk
