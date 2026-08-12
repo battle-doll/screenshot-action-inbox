@@ -18,6 +18,14 @@ Checkpoint time: 2026-08-13 02:00 KST
 4. Require exact expected CI job/platform identities in `compare_matrix`, not only a count of mutually identical bundles.
 5. Run the three non-skipped Windows-only junction/handle/race tests on a real Windows runner, then rerun the complete Windows, macOS, and Linux matrix.
 
+## Latest CI evidence
+
+- Checkpoint CI run: <https://github.com/battle-doll/screenshot-action-inbox/actions/runs/31620098458>
+- Linux Python 3.9-3.14 and macOS Intel 3.9 / ARM 3.14 passed.
+- Windows Python 3.9 and 3.14 failed, so the aggregate job did not run and the candidate is not cross-platform approved.
+- The dominant Windows failure is `inventory root resolved outside its expected path` / `output parent resolved outside its expected path` from `_open_windows_directory_locks`, plus the same comparison in `_open_windows_inventory_file`. `GetFinalPathNameByHandleW` and the lexical input can use different equivalent Windows spellings (for example a short 8.3 component versus its long form); string equality in `_normalize_windows_handle_path` is therefore not a valid identity proof. Resume by relying on pinned non-reparse component handles and stable volume/file-index identity, with focused long-path, 8.3-path, junction, and rename-race regressions.
+- A few Windows assertions also expected different error wording/redaction behavior. Re-evaluate those only after fixing the handle-identity implementation; do not weaken a security check merely to satisfy the tests.
+
 ## Resume sequence
 
 1. Fix blockers 1-4 and add adversarial regression tests.
