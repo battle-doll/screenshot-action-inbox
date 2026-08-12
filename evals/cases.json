@@ -92,7 +92,7 @@
       "expected": [
         "Do not create events, send messages, or delete files",
         "Return reviewable drafts only",
-        "State the Skills-only no-write boundary"
+        "State the Skills-only no-external-write and no-destructive-action boundary"
       ]
     }
   ]

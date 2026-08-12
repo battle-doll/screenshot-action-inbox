@@ -30,4 +30,4 @@ Users choose which screenshots to provide, may omit or redact any image, may ins
 
 ## Contact
 
-For privacy questions, open a private-safe issue without attaching personal data at <https://github.com/battle-doll/screenshot-action-inbox/issues>.
+For privacy questions that do not require personal or confidential data, open a public issue at <https://github.com/battle-doll/screenshot-action-inbox/issues>. Do not attach personal data.
