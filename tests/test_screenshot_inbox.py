@@ -596,6 +596,62 @@ class FilesystemTests(unittest.TestCase):
         second = os.stat_result((stat.S_IFREG | 0o600, 12, 22, 1, 1, 1, 4, 8, 9, 10))
         self.assertNotEqual(inbox._source_stat_key(first), inbox._source_stat_key(second))
 
+    def test_windows_hash_stat_key_ignores_ctime_but_requires_inode(self):
+        first = os.stat_result((stat.S_IFREG | 0o600, 11, 22, 1, 1, 1, 4, 8, 9, 10))
+        ctime_drift = os.stat_result(
+            (stat.S_IFREG | 0o600, 11, 22, 1, 1, 1, 4, 8, 9, 99)
+        )
+        different_inode = os.stat_result(
+            (stat.S_IFREG | 0o600, 12, 22, 1, 1, 1, 4, 8, 9, 10)
+        )
+        self.assertEqual(
+            inbox._windows_inventory_stat_key(first),
+            inbox._windows_inventory_stat_key(ctime_drift),
+        )
+        self.assertNotEqual(
+            inbox._windows_inventory_stat_key(first),
+            inbox._windows_inventory_stat_key(different_inode),
+        )
+
+    def test_windows_hash_accepts_ctime_api_drift_with_stable_handle_identity(self):
+        with safe_tempdir("sai-windows-ctime-") as raw:
+            root = Path(raw)
+            source = root / "screen.png"
+            payload = b"safe"
+            source.write_bytes(payload)
+            real_hash = inbox._hash_inventory_descriptor
+
+            def fake_windows_open(path):
+                descriptor = os.open(str(path), os.O_RDONLY)
+                return descriptor, (7, 101), None
+
+            def hash_with_ctime_drift(descriptor, close_descriptor=True):
+                digest, opened_stat, opened_key = real_hash(
+                    descriptor, close_descriptor=close_descriptor
+                )
+                drifted_stat = mock.Mock()
+                drifted_stat.st_ino = opened_stat.st_ino
+                drifted_stat.st_size = opened_stat.st_size
+                drifted_stat.st_mtime = opened_stat.st_mtime
+                drifted_stat.st_mtime_ns = opened_stat.st_mtime_ns
+                drifted_stat.st_ctime = opened_stat.st_ctime + 100
+                drifted_stat.st_ctime_ns = opened_stat.st_ctime_ns + 100000000000
+                return digest, drifted_stat, opened_key
+
+            with mock.patch.object(
+                inbox, "_secure_inventory_fds_available", return_value=False
+            ), mock.patch.object(
+                inbox, "_is_windows_platform", return_value=True
+            ), mock.patch.object(
+                inbox, "_open_windows_directory_locks", return_value=(None, [], (7, 55))
+            ), mock.patch.object(
+                inbox, "_open_windows_inventory_file", side_effect=fake_windows_open
+            ), mock.patch.object(
+                inbox, "_hash_inventory_descriptor", side_effect=hash_with_ctime_drift
+            ):
+                result = inbox.inventory(root, include_hash=True)
+            self.assertEqual(result["sources"][0]["sha256"], inbox._hash_bytes(payload))
+
     def test_windows_hash_reopens_and_compares_stable_handle_identity(self):
         with safe_tempdir("sai-windows-identity-") as raw:
             root = Path(raw)

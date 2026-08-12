@@ -979,6 +979,21 @@ def _source_metadata_key(stat_result):
     )
 
 
+def _windows_inventory_stat_key(stat_result):
+    """Compare stable Windows identity and content metadata across stat APIs.
+
+    Windows ``st_ctime`` is deprecated and can have different semantics across
+    Python versions and stat entry points.  ``os.lstat``/``os.fstat`` provide
+    the file index as ``st_ino``; the Win32 handle identity is independently
+    checked before and after hashing.
+    """
+    return (
+        getattr(stat_result, "st_ino", None),
+        stat_result.st_size,
+        getattr(stat_result, "st_mtime_ns", int(stat_result.st_mtime * 1000000000)),
+    )
+
+
 def _error_marker(exc):
     code = getattr(exc, "winerror", None)
     if code is None:
@@ -2171,6 +2186,7 @@ def inventory(root, recursive=False, include_hash=False):
             records.append(record)
 
     def visit_fallback(directory, prefix=""):
+        windows_visit = _is_windows_platform()
         try:
             entries = sorted(
                 os.scandir(str(directory)),
@@ -2181,7 +2197,12 @@ def inventory(root, recursive=False, include_hash=False):
         for entry in entries:
             relative = (prefix + "/" + entry.name).lstrip("/")
             try:
-                entry_stat = entry.stat(follow_symlinks=False)
+                # DirEntry.stat() can expose zero/incomplete identity fields on
+                # Windows.  A direct lstat supplies the file index used below.
+                entry_stat = (
+                    os.lstat(entry.path)
+                    if windows_visit else entry.stat(follow_symlinks=False)
+                )
             except OSError as exc:
                 _append_inventory_skip(
                     skipped, relative, "STAT_FAILED_%s" % _error_marker(exc)
@@ -2192,7 +2213,7 @@ def inventory(root, recursive=False, include_hash=False):
                 continue
             if stat.S_ISDIR(entry_stat.st_mode):
                 if recursive:
-                    if not _is_windows_platform():
+                    if not windows_visit:
                         raise InboxError(
                             "recursive inventory is unavailable without secure traversal support"
                         )
@@ -2236,7 +2257,7 @@ def inventory(root, recursive=False, include_hash=False):
             if record is None:
                 continue
             if include_hash:
-                windows_hash = _is_windows_platform()
+                windows_hash = windows_visit
                 descriptor = None
                 after_descriptor = None
                 source_locks = None
@@ -2270,11 +2291,11 @@ def inventory(root, recursive=False, include_hash=False):
                     _close_windows_directory_locks(source_locks)
                     raise _inventory_failure("cannot hash inventory source", relative, exc)
                 entry_compare = (
-                    _source_metadata_key(entry_stat)
+                    _windows_inventory_stat_key(entry_stat)
                     if windows_hash else _source_stat_key(entry_stat)
                 )
                 opened_compare = (
-                    _source_metadata_key(opened_stat)
+                    _windows_inventory_stat_key(opened_stat)
                     if windows_hash else opened_key
                 )
                 if opened_compare != entry_compare:
@@ -2292,7 +2313,7 @@ def inventory(root, recursive=False, include_hash=False):
                         "inventory source changed during hashing", relative, exc
                     )
                 path_after_compare = (
-                    _source_metadata_key(path_after_stat)
+                    _windows_inventory_stat_key(path_after_stat)
                     if windows_hash else _source_stat_key(path_after_stat)
                 )
                 if (
