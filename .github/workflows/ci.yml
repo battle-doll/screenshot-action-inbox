@@ -55,9 +55,13 @@ jobs:
 
       - name: Validate, test, and build twice
         run: python -X utf8 scripts/verify.py all
-
-      - name: Generate runtime artifact evidence
-        run: python -X utf8 scripts/verify.py runtime-evidence
+        env:
+          SAI_MATRIX_ID: ${{ matrix.id }}
+          SAI_MATRIX_OS_LABEL: ${{ matrix.os }}
+          SAI_RUNNER_OS: ${{ runner.os }}
+          SAI_RUNNER_ARCH: ${{ runner.arch }}
+          SAI_MATRIX_PYTHON: ${{ matrix.python }}
+          SAI_COMMIT_SHA: ${{ github.sha }}
 
       - name: Upload exact release candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -94,6 +98,8 @@ jobs:
 
       - name: Require identical ZIP and runtime artifacts from every matrix member
         run: python -X utf8 scripts/verify.py compare-matrix matrix-artifacts --expect-count 10
+        env:
+          SAI_COMMIT_SHA: ${{ github.sha }}
 
       - name: Upload canonical cross-platform candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

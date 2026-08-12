@@ -25,7 +25,7 @@ def canonical_payload():
     return entries, verify._canonical_archive_bytes(entries)
 
 
-def runtime_report():
+def runtime_report(provenance=None, archive_payload=b"archive"):
     artifacts = {
         name: {"sha256": "0" * 64, "bytes": index + 1}
         for index, name in enumerate(sorted(verify.EXPECTED_RUNTIME_ARTIFACTS))
@@ -33,6 +33,9 @@ def runtime_report():
     return {
         "schema_version": 1,
         "fixture": "tests/fixtures/observations.json",
+        "source_archive_sha256": verify.sha256_bytes(archive_payload),
+        "observation_sha256": "2" * 64,
+        "provenance": provenance,
         "artifacts": artifacts,
     }
 
@@ -87,16 +90,94 @@ class CanonicalArchiveTests(unittest.TestCase):
             replacement = b"unvalidated replacement"
             seen = []
 
-            def replace_then_smoke(payload):
+            observation_payload = verify._read_regular_bytes(
+                verify.OBSERVATIONS_PATH, 2 * 1024 * 1024, boundary=verify.ROOT
+            )
+
+            def replace_then_smoke(payload, fixture):
                 candidate.write_bytes(replacement)
-                seen.append(payload)
+                seen.append((payload, fixture))
 
             with mock.patch.object(verify, "_smoke_archive", side_effect=replace_then_smoke):
                 returned = verify.validate_archive(candidate, smoke=True)
 
-            self.assertEqual(seen, [self.payload])
+            self.assertEqual(seen, [(self.payload, observation_payload)])
             self.assertEqual(returned, self.payload)
             self.assertEqual(candidate.read_bytes(), replacement)
+
+
+class ImmutableSnapshotTests(unittest.TestCase):
+    def test_mutated_live_processor_cannot_change_archive_or_runtime_evidence(self):
+        entries = verify._snapshot_package_sources()
+        observation_payload = verify._read_regular_bytes(
+            verify.OBSERVATIONS_PATH, 2 * 1024 * 1024, boundary=verify.ROOT
+        )
+        processor_name = (
+            "skills/organize-screenshot-inbox/scripts/screenshot_inbox.py"
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            changed_processor = Path(raw) / "processor.py"
+            changed_processor.write_bytes(entries[processor_name])
+            changed_sources = dict(verify.PACKAGE_SOURCES)
+            changed_sources[processor_name] = changed_processor
+            changed_processor.write_text("import socket\n", encoding="utf-8")
+            with mock.patch.multiple(
+                verify,
+                PROCESSOR=changed_processor,
+                PACKAGE_SOURCES=changed_sources,
+            ), mock.patch.object(
+                verify,
+                "_read_regular_bytes",
+                side_effect=AssertionError("validated snapshot must not be reread"),
+            ):
+                verify.validate_processor_boundary(entries)
+                archive_payload = verify._canonical_archive_bytes(entries)
+                report = verify._runtime_evidence_report(
+                    entries, observation_payload, provenance=None
+                )
+            with zipfile.ZipFile(io.BytesIO(archive_payload), "r") as archive:
+                self.assertEqual(archive.read(processor_name), entries[processor_name])
+            self.assertEqual(
+                report["source_archive_sha256"],
+                verify.sha256_bytes(archive_payload),
+            )
+
+    def test_all_pipeline_takes_package_snapshot_once_and_reuses_same_object(self):
+        entries = verify._snapshot_package_sources()
+        observation_payload = b"fixture"
+        seen = []
+
+        def record(label):
+            def recorder(source_entries, fixture=None):
+                seen.append((label, source_entries, fixture))
+            return recorder
+
+        with mock.patch.object(
+            verify,
+            "_snapshot_package_sources",
+            side_effect=[entries, AssertionError("second snapshot forbidden")],
+        ) as snapshot, mock.patch.object(
+            verify, "_read_regular_bytes", return_value=observation_payload
+        ) as read, mock.patch.object(
+            verify, "validate_source", side_effect=record("validate")
+        ), mock.patch.object(
+            verify, "run_tests"
+        ), mock.patch.object(
+            verify, "build_release", side_effect=record("build")
+        ), mock.patch.object(
+            verify, "runtime_evidence", side_effect=record("runtime")
+        ):
+            verify.verify_all()
+
+        snapshot.assert_called_once_with()
+        read.assert_called_once_with(
+            verify.OBSERVATIONS_PATH, 2 * 1024 * 1024, boundary=verify.ROOT
+        )
+        self.assertEqual([row[0] for row in seen], ["validate", "build", "runtime"])
+        self.assertTrue(all(row[1] is entries for row in seen))
+        self.assertIsNone(seen[0][2])
+        self.assertEqual(seen[1][2], observation_payload)
+        self.assertEqual(seen[2][2], observation_payload)
 
 
 class ManifestAssetTests(unittest.TestCase):
@@ -154,6 +235,7 @@ class ManifestAssetTests(unittest.TestCase):
             "https://example.com/back\\slash",
             "https://example.com/bad%escape",
             "https://example.com/truncated%2",
+            "https://example.com/encoded%5cbackslash",
         )
         for value in bad_values:
             manifest = copy.deepcopy(self.manifest)
@@ -173,6 +255,7 @@ class ManifestAssetTests(unittest.TestCase):
             "https://example.com/%",
             "https://example.com/%0",
             "https://example.com/%GG",
+            "https://example.com/a%5Cb",
         ):
             with self.subTest(value=value):
                 self.assertFalse(verify._is_valid_https_url(value))
@@ -218,6 +301,48 @@ class OutputPathTests(unittest.TestCase):
             st_file_attributes=getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400),
         )
         self.assertTrue(verify._is_link_or_reparse(result))
+
+    @unittest.skipIf(os.name == "nt", "POSIX descriptor-bound read coverage")
+    def test_parent_swap_cannot_redirect_descriptor_bound_read(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            parent = root / "safe"
+            parent.mkdir()
+            (parent / "source.txt").write_bytes(b"safe")
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "source.txt").write_bytes(b"outside-secret")
+            real_open = os.open
+            swapped = []
+
+            def swap_component(path, flags, *args, **kwargs):
+                if path == "safe" and kwargs.get("dir_fd") is not None and not swapped:
+                    parent.rename(root / "original-safe")
+                    parent.symlink_to(outside, target_is_directory=True)
+                    swapped.append(True)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(verify.os, "open", side_effect=swap_component):
+                with self.assertRaises((verify.VerifyError, OSError)):
+                    verify._read_regular_bytes(
+                        parent / "source.txt", 1024, boundary=root
+                    )
+            self.assertEqual(swapped, [True])
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle-bound read coverage")
+    def test_windows_read_uses_handle_bound_opener(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "source.txt"
+            path.write_bytes(b"safe")
+            real_open = verify._open_windows_regular_file
+            with mock.patch.object(
+                verify, "_open_windows_regular_file", wraps=real_open
+            ) as opener:
+                self.assertEqual(
+                    verify._read_regular_bytes(path, 1024, boundary=Path(raw)),
+                    b"safe",
+                )
+            opener.assert_called_once()
 
     def test_dist_symlink_is_rejected_without_outside_write(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -297,7 +422,7 @@ class OutputPathTests(unittest.TestCase):
             swapped = []
 
             def swap_before_parent_open(path, flags, *args, **kwargs):
-                if Path(path) == parent and not swapped:
+                if path == "nested" and kwargs.get("dir_fd") is not None and not swapped:
                     moved = dist / "original-parent"
                     parent.rename(moved)
                     parent.symlink_to(outside, target_is_directory=True)
@@ -306,14 +431,70 @@ class OutputPathTests(unittest.TestCase):
 
             with mock.patch.multiple(verify, ROOT=root, DIST=dist):
                 with mock.patch.object(verify.os, "open", side_effect=swap_before_parent_open):
-                    try:
+                    with self.assertRaises((verify.VerifyError, OSError)):
                         verify.publish_bytes(output, b"payload")
-                    except verify.VerifyError:
-                        pass
+            self.assertEqual(swapped, [True])
             self.assertFalse((outside / "release.zip").exists())
             safe_publish = dist / "original-parent" / "release.zip"
-            if safe_publish.exists():
-                self.assertEqual(safe_publish.read_bytes(), b"payload")
+            self.assertFalse(safe_publish.exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX descriptor identity coverage")
+    def test_temp_entry_swap_is_detected_before_publish_success(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            dist = root / "dist"
+            dist.mkdir()
+            output = dist / "release.zip"
+            real_rename = os.rename
+            swapped = []
+
+            def replace_temp_before_rename(source, destination, *args, **kwargs):
+                if not swapped:
+                    source_fd = kwargs["src_dir_fd"]
+                    os.unlink(source, dir_fd=source_fd)
+                    replacement = os.open(
+                        source,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=source_fd,
+                    )
+                    try:
+                        os.write(replacement, b"wrong")
+                    finally:
+                        os.close(replacement)
+                    swapped.append(True)
+                return real_rename(source, destination, *args, **kwargs)
+
+            with mock.patch.multiple(verify, ROOT=root, DIST=dist), \
+                    mock.patch.object(
+                        verify.os, "rename", side_effect=replace_temp_before_rename
+                    ):
+                with self.assertRaisesRegex(
+                    verify.VerifyError, "identity differs"
+                ):
+                    verify.publish_bytes(output, b"expected")
+            self.assertEqual(swapped, [True])
+
+    @unittest.skipUnless(os.name == "nt", "Windows direct-handle publish coverage")
+    def test_windows_publish_uses_final_create_new_handle(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            dist = root / "dist"
+            dist.mkdir()
+            output = dist / "release.zip"
+            with mock.patch.multiple(verify, ROOT=root, DIST=dist), \
+                    mock.patch.object(
+                        verify.tempfile,
+                        "mkstemp",
+                        side_effect=AssertionError("Windows temp path publish is forbidden"),
+                    ):
+                verify.publish_bytes(output, b"expected")
+                verify.publish_bytes(output, b"expected")
+                with self.assertRaisesRegex(
+                    verify.VerifyError, "different bytes"
+                ):
+                    verify.publish_bytes(output, b"different")
+            self.assertEqual(output.read_bytes(), b"expected")
 
 
 class ProcessorBoundaryTests(unittest.TestCase):
@@ -365,7 +546,107 @@ class ProcessorBoundaryTests(unittest.TestCase):
             (
                 "import ctypes\ncreate = ctypes.windll.kernel32.CreateProcessW\n"
                 "create(None, None, None, None, False, 0, None, None, None, None)\n",
-                "native process API",
+                "native process API|unapproved ctypes attribute",
+            ),
+        )
+        for source, pattern in cases:
+            with self.subTest(source=source):
+                self.assert_boundary_rejects(source, pattern)
+
+    def test_computed_getattr_and_alias_dataflow_bypasses_are_rejected(self):
+        cases = (
+            (
+                "import os\nprefix = 'sys'\nmember = prefix + 'tem'\n"
+                "lookup = getattr\nrun = lookup(os, member)\nrun('command')\n",
+                "dangerous callable|process API",
+            ),
+            (
+                "import os\ndef choose():\n    return 'system'\n"
+                "run = getattr(os, choose())\n",
+                "dynamic getattr",
+            ),
+            (
+                "import ctypes\nkernel = ctypes.WinDLL('kernel32')\n"
+                "member = 'Create' + 'ProcessW'\ncreate = getattr(kernel, member)\n",
+                "native process API|unapproved native API|exactly load kernel32",
+            ),
+            (
+                "import os\nrun = len\nrun = os.system\nrun('command')\n",
+                "ambiguous|dangerous callable|process API",
+            ),
+            (
+                "import os\nrun = os.__dict__['sys' + 'tem']\nrun('command')\n",
+                "reflective",
+            ),
+            (
+                "import os\nrun = vars(os)['system']\nrun('command')\n",
+                "reflective",
+            ),
+        )
+        for source, pattern in cases:
+            with self.subTest(source=source):
+                self.assert_boundary_rejects(source, pattern)
+
+    def test_ctypes_exports_are_an_exact_kernel32_allowlist(self):
+        allowed = (
+            "import ctypes\n"
+            "kernel = ctypes.WinDLL('kernel32', use_last_error=True)\n"
+            "create_file = kernel.CreateFileW\n"
+            "get_info = kernel.GetFileInformationByHandle\n"
+            "get_path = kernel.GetFinalPathNameByHandleW\n"
+            "close = kernel.CloseHandle\n"
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            processor = root / "processor.py"
+            processor.write_text(allowed, encoding="utf-8")
+            with mock.patch.multiple(verify, ROOT=root, PROCESSOR=processor):
+                verify.validate_processor_boundary()
+
+    def test_release_snapshot_requires_exact_reviewed_processor_bytes(self):
+        entries = verify._snapshot_package_sources()
+        processor_name = (
+            "skills/organize-screenshot-inbox/scripts/screenshot_inbox.py"
+        )
+        changed = dict(entries)
+        changed[processor_name] = entries[processor_name] + b"\n# drift\n"
+        with self.assertRaisesRegex(
+            verify.VerifyError, "reviewed release boundary"
+        ):
+            verify.validate_processor_boundary(changed)
+        for export in ("CreateProcessW", "WinHttpOpen", "DeleteFileW"):
+            source = (
+                "import ctypes\n"
+                "kernel = ctypes.WinDLL('kernel32', use_last_error=True)\n"
+                "call = kernel.%s\n" % export
+            )
+            with self.subTest(export=export):
+                self.assert_boundary_rejects(
+                    source, "native process API|unapproved native API|unapproved kernel32 export"
+                )
+
+    def test_ctypes_allowlist_rejects_reviewed_boundary_bypasses(self):
+        cases = (
+            (
+                "import ctypes\nctypes.pythonapi.PyRun_SimpleString(b'pass')\n",
+                "unapproved ctypes attribute",
+            ),
+            (
+                "import ctypes\nmember = 'python' + 'api'\n"
+                "api = getattr(ctypes, member)\napi.PyRun_SimpleString(b'pass')\n",
+                "ctypes module|unapproved ctypes reference",
+            ),
+            (
+                "import ctypes\nkernel = len\n"
+                "kernel = ctypes.WinDLL('kernel32', use_last_error=True)\n"
+                "kernel.CreateProcessW(None)\n",
+                "exactly one binding",
+            ),
+            (
+                "import ctypes\n"
+                "kernel = [ctypes.WinDLL('kernel32', use_last_error=True)][0]\n"
+                "kernel.CreateProcessW(None)\n",
+                "direct assignment value",
             ),
         )
         for source, pattern in cases:
@@ -421,6 +702,15 @@ class MetadataTests(unittest.TestCase):
 
 
 class MatrixEvidenceTests(unittest.TestCase):
+    COMMIT = "a" * 40
+
+    def identity(self, job_id):
+        return {
+            "job_id": job_id,
+            **verify.EXPECTED_MATRIX[job_id],
+            "commit_sha": self.COMMIT,
+        }
+
     def write_bundle(self, parent, payload, report, checksum=None):
         parent.mkdir()
         archive = parent / verify.ARCHIVE_NAME
@@ -433,55 +723,145 @@ class MatrixEvidenceTests(unittest.TestCase):
             verify._runtime_evidence_bytes(report)
         )
 
-    def matrix_patches(self, root, report, publish):
+    def write_matrix(self, matrix, payload=b"archive"):
+        matrix.mkdir()
+        for job_id in verify.EXPECTED_MATRIX:
+            self.write_bundle(
+                matrix / ("release-%s" % job_id),
+                payload,
+                runtime_report(self.identity(job_id), payload),
+            )
+
+    def matrix_patches(self, report, publish):
         return (
-            mock.patch.multiple(
-                verify,
-                ROOT=root,
-                DIST=root / "dist",
-            ),
             mock.patch.object(verify, "validate_source"),
             mock.patch.object(verify, "_snapshot_package_sources", return_value={}),
             mock.patch.object(verify, "_runtime_evidence_report", return_value=report),
             mock.patch.object(verify, "_validate_archive_bytes"),
             mock.patch.object(verify, "_smoke_archive"),
+            mock.patch.object(verify, "_prepare_dist"),
+            mock.patch.object(
+                verify, "_assert_dist_output", side_effect=lambda path: Path(path)
+            ),
             mock.patch.object(verify, "publish_bytes", publish),
+            mock.patch.dict(os.environ, {"SAI_COMMIT_SHA": self.COMMIT}),
+            mock.patch.object(
+                verify, "_current_git_commit", return_value=self.COMMIT
+            ),
         )
 
+    def run_compare(self, matrix, report, publish):
+        patches = self.matrix_patches(report, publish)
+        with patches[0], patches[1], patches[2], patches[3], patches[4], \
+                patches[5], patches[6], patches[7], patches[8], patches[9]:
+            return verify.compare_matrix(matrix, len(verify.EXPECTED_MATRIX))
+
     def test_matrix_rejects_missing_or_extra_bundle_files(self):
-        report = runtime_report()
+        payload = b"archive"
+        report = runtime_report(archive_payload=payload)
         for mode in ("missing", "extra"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as raw:
-                root = Path(raw)
-                matrix = root / "matrix"
-                matrix.mkdir()
-                bundle = matrix / "job"
-                self.write_bundle(bundle, b"archive", report)
+                matrix = Path(raw) / "matrix"
+                self.write_matrix(matrix, payload)
+                bundle = matrix / "release-ubuntu-py39"
                 if mode == "missing":
                     (bundle / "runtime-artifact-evidence.json").unlink()
                 else:
                     (bundle / "unexpected.txt").write_text("extra", encoding="utf-8")
                 publish = mock.Mock()
-                patches = self.matrix_patches(root, report, publish)
-                with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
-                    with self.assertRaises(verify.VerifyError):
-                        verify.compare_matrix(matrix, 1)
+                with self.assertRaises(verify.VerifyError):
+                    self.run_compare(matrix, report, publish)
                 publish.assert_not_called()
 
     def test_matrix_validates_every_bundle_before_any_publish(self):
-        report = runtime_report()
+        payload = b"archive"
+        report = runtime_report(archive_payload=payload)
+        with tempfile.TemporaryDirectory() as raw:
+            matrix = Path(raw) / "matrix"
+            self.write_matrix(matrix, payload)
+            checksum = (
+                matrix / "release-windows-py314" / (verify.ARCHIVE_NAME + ".sha256")
+            )
+            checksum.write_bytes(b"wrong\n")
+            publish = mock.Mock()
+            with self.assertRaisesRegex(verify.VerifyError, "checksum"):
+                self.run_compare(matrix, report, publish)
+            publish.assert_not_called()
+
+    def test_matrix_requires_exact_one_level_job_set_and_provenance(self):
+        payload = b"archive"
+        report = runtime_report(archive_payload=payload)
+        for mutation in ("extra-root", "wrong-provenance"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as raw:
+                matrix = Path(raw) / "matrix"
+                self.write_matrix(matrix, payload)
+                if mutation == "extra-root":
+                    (matrix / "copied-job").mkdir()
+                else:
+                    evidence = matrix / "release-ubuntu-py39" / "runtime-artifact-evidence.json"
+                    bad = runtime_report(self.identity("ubuntu-py310"), payload)
+                    evidence.write_bytes(verify._runtime_evidence_bytes(bad))
+                publish = mock.Mock()
+                with self.assertRaisesRegex(verify.VerifyError, "exact expected|artifact directory"):
+                    self.run_compare(matrix, report, publish)
+                publish.assert_not_called()
+
+    def test_matrix_never_uses_recursive_path_discovery_and_reports_identities(self):
+        payload = b"archive"
+        report = runtime_report(archive_payload=payload)
+        with tempfile.TemporaryDirectory() as raw:
+            matrix = Path(raw) / "matrix"
+            self.write_matrix(matrix, payload)
+            published = {}
+
+            def capture(path, value, mode=0o644):
+                published[Path(path).name] = value
+
+            with mock.patch.object(
+                Path, "rglob", side_effect=AssertionError("rglob must not be used")
+            ):
+                self.run_compare(matrix, report, capture)
+            final = json.loads(published["cross-platform-reproducibility.json"])
+            self.assertEqual(final["commit_sha"], self.COMMIT)
+            self.assertEqual(
+                [row["job_id"] for row in final["matrix_identities"]],
+                sorted(verify.EXPECTED_MATRIX),
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlink regression")
+    def test_matrix_rejects_symlink_before_bundle_enumeration(self):
+        payload = b"archive"
+        report = runtime_report(archive_payload=payload)
+        with tempfile.TemporaryDirectory() as raw:
+            matrix = Path(raw) / "matrix"
+            self.write_matrix(matrix, payload)
+            target = matrix / "release-ubuntu-py39"
+            moved = matrix / "real-ubuntu-py39"
+            target.rename(moved)
+            target.symlink_to(moved, target_is_directory=True)
+            publish = mock.Mock()
+            with self.assertRaisesRegex(verify.VerifyError, "symlink|reparse"):
+                self.run_compare(matrix, report, publish)
+            publish.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction regression")
+    def test_one_level_enumerator_rejects_windows_junction(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             matrix = root / "matrix"
             matrix.mkdir()
-            self.write_bundle(matrix / "job-a", b"archive", report)
-            self.write_bundle(matrix / "job-b", b"archive", report, checksum=b"wrong\n")
-            publish = mock.Mock()
-            patches = self.matrix_patches(root, report, publish)
-            with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
-                with self.assertRaisesRegex(verify.VerifyError, "checksum"):
-                    verify.compare_matrix(matrix, 2)
-            publish.assert_not_called()
+            outside = root / "outside"
+            outside.mkdir()
+            junction = matrix / "release-ubuntu-py39"
+            result = os.spawnv(
+                os.P_WAIT,
+                os.environ.get("COMSPEC", "cmd.exe"),
+                ["cmd.exe", "/c", "mklink", "/J", str(junction), str(outside)],
+            )
+            if result != 0:
+                self.skipTest("Windows junction creation is unavailable")
+            with self.assertRaisesRegex(verify.VerifyError, "reparse|link"):
+                verify._enumerate_plain_directory(matrix)
 
     def test_runtime_evidence_requires_exact_five_artifacts(self):
         report = runtime_report()
