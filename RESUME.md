@@ -17,6 +17,8 @@ Checkpoint time: 2026-08-13 02:00 KST
 3. Close computed-name static-boundary bypasses in `validate_processor_boundary`, including dangerous APIs reached through constructed `getattr` names. Keep the Windows-required `ctypes` use narrowly allowlisted.
 4. Require exact expected CI job/platform identities in `compare_matrix`, not only a count of mutually identical bundles.
 5. Run the three non-skipped Windows-only junction/handle/race tests on a real Windows runner, then rerun the complete Windows, macOS, and Linux matrix.
+6. Replace `Path.rglob()` matrix discovery with component-bound enumeration that cannot traverse a Windows junction on Python 3.9 before validation.
+7. Extend metadata/path regressions for Windows reserved `COM¹`/`LPT²` names and reject malformed HTTPS paths containing backslashes or invalid percent escapes.
 
 ## Latest CI evidence
 
