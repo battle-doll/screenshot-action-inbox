@@ -1173,6 +1173,30 @@ def _valid_artifact_names(artifacts):
             or "\\" in name
         ):
             raise InboxError("artifact names must be plain filenames")
+        if _is_windows_platform():
+            _require_windows_plain_filename(name, "artifact name")
+
+
+def _require_windows_plain_filename(name, label):
+    """Reject Windows names that alias streams, devices, or normalized names."""
+    invalid_characters = '<>:"/\\|?*'
+    if (
+        not isinstance(name, str)
+        or not name
+        or name[-1] in " ."
+        or any(ord(character) < 32 or character in invalid_characters for character in name)
+    ):
+        raise InboxError("%s must be a plain Windows filename" % label)
+    device_stem = name.split(".", 1)[0].upper()
+    if (
+        device_stem in {"CON", "PRN", "AUX", "NUL"}
+        or (
+            len(device_stem) == 4
+            and device_stem[:3] in {"COM", "LPT"}
+            and device_stem[3] in "123456789¹²³"
+        )
+    ):
+        raise InboxError("%s must not use a reserved Windows filename" % label)
 
 
 def _read_plain_file_at(directory_fd, name):
@@ -1232,7 +1256,9 @@ def _existing_artifacts_match_at(parent_fd, directory_name, artifacts):
         os.close(output_fd)
 
 
-def _existing_artifacts_match_unlocked(output_dir, artifacts):
+def _existing_artifacts_match_unlocked(
+    output_dir, artifacts, windows_directory_identity=None
+):
     try:
         descriptor = _open_plain_directory_fd(output_dir, "existing output")
     except InboxError:
@@ -1251,6 +1277,12 @@ def _existing_artifacts_match_unlocked(output_dir, artifacts):
         finally:
             os.close(descriptor)
     output_dir = Path(output_dir)
+    if (
+        windows_directory_identity is not None
+        and _windows_directory_identity(output_dir, "existing output")
+        != windows_directory_identity
+    ):
+        return False
     try:
         actual = {path.name for path in output_dir.iterdir()}
     except OSError:
@@ -1260,6 +1292,14 @@ def _existing_artifacts_match_unlocked(output_dir, artifacts):
     for name, payload in artifacts.items():
         path = output_dir / name
         try:
+            if _is_windows_platform():
+                if _read_windows_regular_file(
+                    path,
+                    "existing output artifact",
+                    expected_parent_identity=windows_directory_identity,
+                ) != payload:
+                    return False
+                continue
             path_stat = os.lstat(str(path))
             if (
                 not stat.S_ISREG(path_stat.st_mode)
@@ -1270,6 +1310,12 @@ def _existing_artifacts_match_unlocked(output_dir, artifacts):
                 return False
         except OSError:
             return False
+    if (
+        windows_directory_identity is not None
+        and _windows_directory_identity(output_dir, "existing output")
+        != windows_directory_identity
+    ):
+        return False
     return True
 
 
@@ -1279,11 +1325,105 @@ def _existing_artifacts_match(output_dir, artifacts):
     locks = None
     try:
         locks = _open_windows_directory_locks(output_dir, "existing output")
-        return _existing_artifacts_match_unlocked(output_dir, artifacts)
+        return _existing_artifacts_match_unlocked(output_dir, artifacts, locks[2])
     except (InboxError, OSError):
         return False
     finally:
         _close_windows_directory_locks(locks)
+
+
+def _write_windows_regular_file(
+    path, payload, label, expected_parent_identity=None
+):
+    descriptor, identity, parent_locks = _open_windows_regular_file(
+        path,
+        0x40000000,
+        1,
+        label,
+        expected_parent_identity=expected_parent_identity,
+    )
+    try:
+        if (
+            expected_parent_identity is not None
+            and _windows_directory_identity(Path(path).parent, label + " parent")
+            != expected_parent_identity
+        ):
+            raise InboxError("%s parent identity changed before writing" % label)
+        handle = os.fdopen(descriptor, "wb")
+        descriptor = None
+        with handle:
+            opened_key = _source_metadata_key(os.fstat(handle.fileno()))
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+            after_key = _source_metadata_key(os.fstat(handle.fileno()))
+        if opened_key[:1] != (0,) or after_key[0] != len(payload):
+            raise InboxError("%s size changed while writing" % label)
+        if _windows_regular_file_identity(
+            path,
+            label,
+            expected_parent_identity=expected_parent_identity,
+        ) != identity:
+            raise InboxError("%s identity changed while writing" % label)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        _close_windows_directory_locks(parent_locks)
+
+
+def _write_artifacts_windows(destination, artifacts):
+    """Publish directly into a newly-created verified destination on Windows.
+
+    Windows lacks Python dir-fd creation/rename primitives.  Creating the final
+    directory once removes the stage-directory rename window.  Any interrupted
+    write leaves an incomplete directory that subsequent runs reject rather
+    than replacing or reporting as successful.
+    """
+    destination = Path(destination)
+    _require_windows_plain_filename(destination.name, "output directory name")
+    parent = destination.parent
+    parent_locks = _open_windows_directory_locks(parent, "output parent")
+    parent_identity = parent_locks[2]
+    destination_locks = None
+    try:
+        _require_plain_directory(parent, "output parent")
+        if _lexists(destination):
+            if _existing_artifacts_match(destination, artifacts):
+                return "UNCHANGED"
+            raise InboxError("output already exists with different or incomplete content")
+        if _windows_directory_identity(parent, "output parent") != parent_identity:
+            raise InboxError("output parent identity changed before publication")
+        os.mkdir(str(destination), 0o700)
+        destination_locks = _open_windows_directory_locks(
+            destination, "output destination"
+        )
+        destination_identity = destination_locks[2]
+        if _windows_directory_identity(parent, "output parent") != parent_identity:
+            raise InboxError("output parent identity changed during publication")
+        for name, payload in sorted(artifacts.items()):
+            if _windows_directory_identity(
+                destination, "output destination"
+            ) != destination_identity:
+                raise InboxError("output destination identity changed while writing")
+            _write_windows_regular_file(
+                destination / name,
+                payload,
+                "output artifact",
+                expected_parent_identity=destination_identity,
+            )
+        if _windows_directory_identity(
+            destination, "output destination"
+        ) != destination_identity:
+            raise InboxError("output destination identity changed during publication")
+        if not _existing_artifacts_match(destination, artifacts):
+            raise InboxError("output destination verification failed after writing")
+        return "CREATED"
+    finally:
+        # A failed publication deliberately leaves any partial destination as
+        # a fail-closed marker.  Never remove it by pathname after an identity
+        # or reparse failure.
+        _close_windows_directory_locks(destination_locks)
+        _close_windows_directory_locks(parent_locks)
 
 
 def _write_artifacts_at(parent_fd, destination_name, artifacts):
@@ -1403,6 +1543,8 @@ def write_artifacts(output, artifacts):
     _valid_artifact_names(artifacts)
     destination = Path(output)
     parent = destination.parent
+    if _is_windows_platform():
+        return _write_artifacts_windows(destination, artifacts)
     if _secure_output_fds_available():
         parent_fd = _open_plain_directory_fd(
             parent, "output parent", canonicalize_system_prefix=True
@@ -1416,8 +1558,6 @@ def write_artifacts(output, artifacts):
 
     windows_parent_locks = None
     try:
-        if _is_windows_platform():
-            windows_parent_locks = _open_windows_directory_locks(parent, "output parent")
         _require_plain_directory(parent, "output parent")
         if _lexists(destination):
             if _existing_artifacts_match(destination, artifacts):
@@ -1539,6 +1679,150 @@ def _windows_final_handle_path(api, handle):
         size = length + 1
 
 
+def _open_windows_regular_file(
+    path, access, creation, label, expected_parent_identity=None
+):
+    """Open one Windows file without following a reparse point.
+
+    The returned CRT descriptor owns the Win32 handle.  Parent directory
+    handles remain open until the caller completes all handle/path identity
+    checks and closes the returned lock token.
+    """
+    if not _is_windows_platform():
+        raise InboxError("Windows handle binding is unavailable on this platform")
+    _require_windows_plain_filename(Path(path).name, label)
+    import msvcrt
+
+    parent_locks = _open_windows_directory_locks(Path(path).parent, label + " parent")
+    api = parent_locks[0]
+    ctypes_module = api[0]
+    share_read = 0x00000001
+    share_read_write = share_read | 0x00000002
+    open_reparse_point = 0x00200000
+    sequential_scan = 0x08000000
+    handle = None
+    transferred = False
+    try:
+        if (
+            expected_parent_identity is not None
+            and parent_locks[2] != expected_parent_identity
+        ):
+            raise InboxError("%s parent identity changed before opening" % label)
+        handle = api[3](
+            os.path.abspath(os.fspath(path)),
+            access,
+            share_read,
+            None,
+            creation,
+            open_reparse_point | sequential_scan,
+            None,
+        )
+        invalid_handle = ctypes_module.c_void_p(-1).value
+        if _windows_handle_value(ctypes_module, handle) == invalid_handle:
+            handle = None
+            raise ctypes_module.WinError(ctypes_module.get_last_error())
+        information, identity = _windows_handle_information(api, handle)
+        if information.dwFileAttributes & 0x400:
+            raise InboxError("%s is a link or reparse point" % label)
+        if information.dwFileAttributes & 0x10:
+            raise InboxError("%s is not a plain regular file" % label)
+        _verify_windows_handle_identity(
+            api,
+            handle,
+            identity,
+            0x00000080,  # FILE_READ_ATTRIBUTES
+            share_read_write if access & 0x40000000 else share_read,
+            open_reparse_point | sequential_scan,
+            label,
+            False,
+        )
+        if expected_parent_identity is not None:
+            final_parent = Path(_windows_final_handle_path(api, handle)).parent
+            if _windows_directory_identity(
+                final_parent, label + " final parent"
+            ) != expected_parent_identity:
+                raise InboxError("%s opened in an unexpected directory" % label)
+        flags = getattr(os, "O_BINARY", 0)
+        flags |= os.O_WRONLY if access & 0x40000000 else os.O_RDONLY
+        descriptor = msvcrt.open_osfhandle(
+            _windows_handle_value(ctypes_module, handle), flags
+        )
+        transferred = True
+        return descriptor, identity, parent_locks
+    finally:
+        if handle is not None and not transferred:
+            api[6](handle)
+        if not transferred:
+            _close_windows_directory_locks(parent_locks)
+
+
+def _windows_regular_file_identity(
+    path, label, expected_parent_identity=None
+):
+    descriptor, identity, parent_locks = _open_windows_regular_file(
+        path,
+        0x80000000,
+        3,
+        label,
+        expected_parent_identity=expected_parent_identity,
+    )
+    try:
+        to_close = descriptor
+        descriptor = None
+        os.close(to_close)
+        return identity
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        _close_windows_directory_locks(parent_locks)
+
+
+def _windows_directory_identity(path, label):
+    locks = _open_windows_directory_locks(path, label)
+    try:
+        return locks[2]
+    finally:
+        _close_windows_directory_locks(locks)
+
+
+def _read_windows_regular_file(
+    path, label, expected_parent_identity=None
+):
+    descriptor, identity, parent_locks = _open_windows_regular_file(
+        path,
+        0x80000000,
+        3,
+        label,
+        expected_parent_identity=expected_parent_identity,
+    )
+    try:
+        if (
+            expected_parent_identity is not None
+            and _windows_directory_identity(Path(path).parent, label + " parent")
+            != expected_parent_identity
+        ):
+            raise InboxError("%s parent identity changed before reading" % label)
+        handle = os.fdopen(descriptor, "rb")
+        descriptor = None
+        with handle:
+            opened_key = _source_metadata_key(os.fstat(handle.fileno()))
+            payload = handle.read()
+            after_key = _source_metadata_key(os.fstat(handle.fileno()))
+        if opened_key != after_key:
+            raise InboxError("%s changed while reading" % label)
+        if _windows_regular_file_identity(
+            path,
+            label,
+            expected_parent_identity=expected_parent_identity,
+        ) != identity:
+            raise InboxError("%s identity changed while reading" % label)
+        return payload
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        _close_windows_directory_locks(parent_locks)
+
+
 def _verify_windows_handle_identity(
     api, handle, expected_identity, desired_access, share_mode, open_flags, label,
     expect_directory,
@@ -1581,7 +1865,13 @@ def _verify_windows_handle_identity(
 
 
 def _open_windows_directory_locks(path, label):
-    """Pin each Windows directory component against rename/replacement."""
+    """Open and identify every non-reparse Windows directory component.
+
+    Some Windows filesystems/runtimes still permit a directory rename while
+    these handles are open.  Callers therefore retain the handles for object
+    access and also compare the recorded identities at security boundaries;
+    they do not rely on share mode alone to prevent replacement.
+    """
     api = _windows_file_information_api()
     ctypes_module = api[0]
     absolute = os.path.abspath(os.fspath(path))
@@ -1637,7 +1927,7 @@ def _open_windows_directory_locks(path, label):
                 True,
             )
         return (api, handles, final_identity)
-    except (InboxError, OSError):
+    except Exception:
         for handle in reversed(handles):
             api[6](handle)
         raise
@@ -1652,12 +1942,12 @@ def _close_windows_directory_locks(locks):
 
 
 def _open_windows_inventory_file(path):
-    """Open a Windows file and retain its pinned parent-directory handles.
+    """Open a Windows file and retain its verified parent-directory handles.
 
     The caller must close both the returned descriptor and directory locks.
-    Keeping every ancestor handle open without FILE_SHARE_DELETE prevents a
-    path component from being renamed or replaced through the hash/recheck
-    window.
+    The file descriptor remains bound to the opened object if an ancestor is
+    renamed; callers additionally recheck stable component identities before
+    accepting the pathname-based result.
     """
     if not _is_windows_platform():
         raise InboxError("Windows handle binding is unavailable on this platform")
@@ -2094,6 +2384,36 @@ def inventory(root, recursive=False, include_hash=False):
 def write_single_file(path, payload):
     destination = Path(path)
     parent = destination.parent
+    if _is_windows_platform():
+        _require_windows_plain_filename(destination.name, "output filename")
+        parent_locks = _open_windows_directory_locks(parent, "output parent")
+        parent_identity = parent_locks[2]
+        try:
+            _require_plain_directory(parent, "output parent")
+            if _lexists(destination):
+                try:
+                    if _read_windows_regular_file(
+                        destination,
+                        "existing output",
+                        expected_parent_identity=parent_identity,
+                    ) == payload:
+                        return "UNCHANGED"
+                except (InboxError, OSError):
+                    pass
+                raise InboxError("refusing to overwrite existing output")
+            if _windows_directory_identity(parent, "output parent") != parent_identity:
+                raise InboxError("output parent identity changed before writing")
+            _write_windows_regular_file(
+                destination,
+                payload,
+                "output destination",
+                expected_parent_identity=parent_identity,
+            )
+            if _windows_directory_identity(parent, "output parent") != parent_identity:
+                raise InboxError("output parent identity changed while writing")
+            return "CREATED"
+        finally:
+            _close_windows_directory_locks(parent_locks)
     if _secure_output_fds_available():
         parent_fd = _open_plain_directory_fd(
             parent, "output parent", canonicalize_system_prefix=True
@@ -2176,8 +2496,6 @@ def write_single_file(path, payload):
 
     windows_parent_locks = None
     try:
-        if _is_windows_platform():
-            windows_parent_locks = _open_windows_directory_locks(parent, "output parent")
         _require_plain_directory(parent, "output parent")
         if _lexists(destination):
             try:

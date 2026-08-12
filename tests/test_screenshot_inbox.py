@@ -685,8 +685,8 @@ class FilesystemTests(unittest.TestCase):
                     inbox._close_windows_directory_locks(locks)
             self.assertEqual(len(set(identities)), 1)
 
-    @unittest.skipUnless(os.name == "nt", "Windows component pinning coverage")
-    def test_windows_directory_handle_prevents_component_rename(self):
+    @unittest.skipUnless(os.name == "nt", "Windows component identity coverage")
+    def test_windows_directory_handle_detects_component_rename(self):
         with tempfile.TemporaryDirectory(prefix="sai-windows-pin-") as raw:
             root = Path(raw)
             nested = root / "nested"
@@ -694,20 +694,223 @@ class FilesystemTests(unittest.TestCase):
             nested.mkdir()
             locks = inbox._open_windows_directory_locks(nested, "pinned directory")
             try:
-                with self.assertRaises(OSError):
-                    os.rename(str(nested), str(moved))
-                recheck = inbox._open_windows_directory_locks(
-                    nested, "pinned directory recheck"
-                )
                 try:
-                    self.assertEqual(locks[2], recheck[2])
-                finally:
-                    inbox._close_windows_directory_locks(recheck)
+                    os.rename(str(nested), str(moved))
+                except OSError:
+                    self.skipTest("runner blocks rename while the directory handle is open")
+                nested.mkdir()
+                self.assertNotEqual(
+                    locks[2],
+                    inbox._windows_directory_identity(
+                        nested, "replacement directory"
+                    ),
+                )
             finally:
                 inbox._close_windows_directory_locks(locks)
 
-    @unittest.skipUnless(os.name == "nt", "Windows ancestor pinning coverage")
-    def test_windows_inventory_file_keeps_ancestors_pinned_until_closed(self):
+    def test_windows_artifact_contract_writes_directly_to_final_destination(self):
+        data = inbox.validate_observations(load_fixture())
+        artifacts = inbox.build_artifacts(data)
+        with tempfile.TemporaryDirectory(prefix="sai-windows-direct-") as raw:
+            root = Path(raw)
+            destination = root / "result"
+
+            def fake_locks(path, unused_label):
+                identity = (7, 202) if Path(path) == destination else (7, 101)
+                return (None, [], identity)
+
+            def fake_write(path, payload, unused_label, expected_parent_identity=None):
+                self.assertEqual(expected_parent_identity, (7, 202))
+                Path(path).write_bytes(payload)
+
+            with mock.patch.object(inbox, "_is_windows_platform", return_value=True), \
+                    mock.patch.object(
+                        inbox, "_open_windows_directory_locks", side_effect=fake_locks
+                    ), \
+                    mock.patch.object(inbox, "_require_plain_directory"), \
+                    mock.patch.object(
+                        inbox, "_write_windows_regular_file", side_effect=fake_write
+                    ) as write_file, \
+                    mock.patch.object(
+                        inbox, "_existing_artifacts_match", return_value=True
+                    ), \
+                    mock.patch.object(
+                        inbox.tempfile,
+                        "mkdtemp",
+                        side_effect=AssertionError("Windows must not create a stage directory"),
+                    ), \
+                    mock.patch.object(
+                        inbox.os,
+                        "replace",
+                        side_effect=AssertionError("Windows must not publish by path rename"),
+                    ):
+                self.assertEqual(
+                    inbox.write_artifacts(destination, artifacts), "CREATED"
+                )
+            self.assertEqual(write_file.call_count, len(artifacts))
+            self.assertEqual(
+                {path.name for path in destination.iterdir()}, set(artifacts)
+            )
+
+    def test_windows_regular_file_contract_uses_create_new_verified_handle(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-create-") as raw:
+            destination = Path(raw) / "receipt.json"
+            descriptor = os.open(
+                str(destination), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+            )
+            locks = (None, [], (5, 77))
+            with mock.patch.object(
+                inbox,
+                "_open_windows_regular_file",
+                return_value=(descriptor, (5, 88), locks),
+            ) as verified_open, mock.patch.object(
+                inbox, "_windows_directory_identity", return_value=(5, 77)
+            ), mock.patch.object(
+                inbox, "_windows_regular_file_identity", return_value=(5, 88)
+            ):
+                inbox._write_windows_regular_file(
+                    destination,
+                    b"safe",
+                    "output artifact",
+                    expected_parent_identity=(5, 77),
+                )
+            verified_open.assert_called_once_with(
+                destination,
+                0x40000000,
+                1,
+                "output artifact",
+                expected_parent_identity=(5, 77),
+            )
+            self.assertEqual(destination.read_bytes(), b"safe")
+
+    def test_windows_existing_artifact_contract_uses_verified_handle_read(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-read-") as raw:
+            output = Path(raw) / "result"
+            output.mkdir()
+            artifact = output / "receipt.json"
+            artifact.write_bytes(b"safe")
+            with mock.patch.object(inbox, "_is_windows_platform", return_value=True), \
+                    mock.patch.object(
+                        inbox, "_open_plain_directory_fd", return_value=None
+                    ), \
+                    mock.patch.object(
+                        inbox,
+                        "_windows_directory_identity",
+                        return_value=(9, 44),
+                    ), \
+                    mock.patch.object(
+                        inbox, "_read_windows_regular_file", return_value=b"safe"
+                    ) as verified_read, \
+                    mock.patch.object(
+                        Path,
+                        "read_bytes",
+                        side_effect=AssertionError("pathname read is forbidden on Windows"),
+                    ):
+                self.assertTrue(
+                    inbox._existing_artifacts_match_unlocked(
+                        output, {"receipt.json": b"safe"}, (9, 44)
+                    )
+                )
+            verified_read.assert_called_once_with(
+                artifact,
+                "existing output artifact",
+                expected_parent_identity=(9, 44),
+            )
+
+    def test_windows_single_file_existing_check_uses_verified_handle_read(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-single-read-") as raw:
+            destination = Path(raw) / "inventory.json"
+            destination.write_bytes(b"safe")
+            locks = (None, [], (9, 55))
+            with mock.patch.object(inbox, "_is_windows_platform", return_value=True), \
+                    mock.patch.object(
+                        inbox, "_open_windows_directory_locks", return_value=locks
+                    ), \
+                    mock.patch.object(inbox, "_require_plain_directory"), \
+                    mock.patch.object(
+                        inbox, "_read_windows_regular_file", return_value=b"safe"
+                    ) as verified_read, \
+                    mock.patch.object(
+                        Path,
+                        "read_bytes",
+                        side_effect=AssertionError("pathname read is forbidden on Windows"),
+                    ):
+                self.assertEqual(
+                    inbox.write_single_file(destination, b"safe"), "UNCHANGED"
+                )
+            verified_read.assert_called_once_with(
+                destination,
+                "existing output",
+                expected_parent_identity=(9, 55),
+            )
+
+    def test_windows_output_names_reject_streams_devices_and_aliases(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-names-") as raw:
+            root = Path(raw)
+            base = root / "base.txt"
+            base.write_bytes(b"unchanged")
+            invalid = ["base.txt:inventory", "CON.json", "receipt.json."]
+            with mock.patch.object(inbox, "_is_windows_platform", return_value=True):
+                for name in invalid:
+                    with self.subTest(name=name):
+                        with self.assertRaisesRegex(
+                            inbox.InboxError, "plain Windows|reserved Windows"
+                        ):
+                            inbox.write_single_file(root / name, b"unsafe")
+                        with self.assertRaisesRegex(
+                            inbox.InboxError, "plain Windows|reserved Windows"
+                        ):
+                            inbox._valid_artifact_names({name: b"unsafe"})
+            self.assertEqual(base.read_bytes(), b"unchanged")
+
+    @unittest.skipUnless(os.name == "nt", "Windows alternate stream coverage")
+    def test_windows_single_file_rejects_ads_without_mutating_base(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-ads-") as raw:
+            base = Path(raw) / "base.txt"
+            base.write_bytes(b"unchanged")
+            alternate_stream = Path(str(base) + ":inventory")
+            with self.assertRaisesRegex(inbox.InboxError, "plain Windows filename"):
+                inbox.write_single_file(alternate_stream, b"unsafe")
+            self.assertEqual(base.read_bytes(), b"unchanged")
+            self.assertFalse(os.path.exists(str(alternate_stream)))
+
+    @unittest.skipUnless(os.name == "nt", "Windows output replacement coverage")
+    def test_windows_output_directory_replacement_is_detected_before_file_write(self):
+        data = inbox.validate_observations(load_fixture())
+        artifacts = inbox.build_artifacts(data)
+        with tempfile.TemporaryDirectory(prefix="sai-windows-output-race-") as raw:
+            root = Path(raw)
+            destination = root / "result"
+            moved = root / "moved"
+            real_write = inbox._write_windows_regular_file
+            swapped = {"done": False}
+
+            def racing_write(path, payload, label, expected_parent_identity=None):
+                if not swapped["done"]:
+                    swapped["done"] = True
+                    os.rename(str(destination), str(moved))
+                    destination.mkdir()
+                return real_write(
+                    path,
+                    payload,
+                    label,
+                    expected_parent_identity=expected_parent_identity,
+                )
+
+            try:
+                with mock.patch.object(
+                    inbox, "_write_windows_regular_file", side_effect=racing_write
+                ):
+                    with self.assertRaisesRegex(inbox.InboxError, "parent identity changed"):
+                        inbox.write_artifacts(destination, artifacts)
+            except OSError:
+                self.skipTest("runner does not permit the directory rename race")
+            self.assertTrue(swapped["done"])
+            self.assertEqual(list(destination.iterdir()), [])
+            self.assertEqual(list(moved.iterdir()), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows ancestor identity coverage")
+    def test_windows_inventory_file_blocks_or_detects_ancestor_rename(self):
         with tempfile.TemporaryDirectory(prefix="sai-windows-ancestor-") as raw:
             root = Path(raw)
             ancestor = root / "ancestor"
@@ -720,8 +923,19 @@ class FilesystemTests(unittest.TestCase):
                 source
             )
             try:
-                with self.assertRaises(OSError):
+                try:
                     os.rename(str(ancestor), str(moved))
+                except OSError:
+                    moved = None
+                if moved is not None:
+                    nested.mkdir(parents=True)
+                    (nested / "screen.png").write_bytes(b"replacement")
+                    self.assertNotEqual(
+                        locks[2],
+                        inbox._windows_directory_identity(
+                            nested, "replacement inventory parent"
+                        ),
+                    )
                 with os.fdopen(descriptor, "rb", closefd=False) as handle:
                     self.assertEqual(handle.read(), b"safe")
             finally:
