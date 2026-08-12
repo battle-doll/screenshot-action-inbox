@@ -29,10 +29,11 @@
     {
       "id": "positive-calendar-draft",
       "prompt": "Extract the event in this invitation and draft a calendar entry for review.",
-      "fixture": "Synthetic invitation with title, full date, start and end times, explicit +09:00 offset, and location.",
+      "fixture": "Synthetic invitation with title, full date, start and end times, explicit +09:00 offset, location, and a SHA-256-backed source inventory.",
       "expected": [
         "Create one review-only calendar draft",
         "Normalize the timed event to UTC in ICS",
+        "Mark the VEVENT CLASS:PRIVATE and bind its stable UID to the referenced source hash",
         "Preserve the visible source and confidence",
         "Do not import the calendar event"
       ]
@@ -54,6 +55,8 @@
       "fixture": "One unreadable screenshot and two screenshots showing conflicting due dates.",
       "expected": [
         "Mark unreadable fields UNKNOWN",
+        "Mark the unreadable source unreadable and its affected items needs_review",
+        "List the incomplete source in the digest, exclude it from Sources reviewed, and include it in Needs review",
         "Keep both conflicting dates visible",
         "Ask a focused clarification question",
         "Exclude unresolved dates from calendar.ics"

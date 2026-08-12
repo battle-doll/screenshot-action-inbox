@@ -75,7 +75,7 @@ It writes:
 
 - `weekly-digest.md`: grouped actions, events, receipts, references, and unresolved questions;
 - `actions.csv`: spreadsheet-ready rows with formula-injection protection;
-- `calendar.ics`: private drafts only for exact date/time observations backed by source hashes;
+- `calendar.ics`: plaintext drafts marked `CLASS:PRIVATE` for exact date/time observations backed by source hashes;
 - `archive-plan.json`: proposed, unexecuted file moves requiring explicit approval;
 - `receipt.json`: input hash, counts, warnings, and output hashes.
 

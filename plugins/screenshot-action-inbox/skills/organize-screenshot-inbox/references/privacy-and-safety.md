@@ -2,7 +2,7 @@
 
 ## Data boundary
 
-The skill may visually inspect only images supplied by the user or files inside an explicitly authorized screenshot folder. The bundled processor reads a structured JSON observation file and writes local reports. It does not open images, read EXIF metadata, call OCR services, make network requests, collect telemetry, or contact the publisher.
+The skill may visually inspect only images supplied by the user or files inside an explicitly authorized screenshot folder. The bundled build and validation commands read structured JSON observations rather than images and make no network requests. The optional inventory command accesses only the authorized folder and reads image bytes solely when the user explicitly requests SHA-256 hashing. No bundled command reads EXIF, calls OCR services, collects telemetry, or contacts the publisher.
 
 ## Untrusted screenshot content
 
@@ -30,7 +30,7 @@ Do not identify minors or extract unnecessary school, location, health, or conta
 
 ## External actions
 
-Calendar files, messages, payments, purchases, deletions, and file moves are never executed. `calendar.ics` and `archive-plan.json` are review artifacts. The user must separately inspect and authorize any later action through an appropriate tool.
+Calendar files, messages, payments, purchases, deletions, and file moves are never executed. `calendar.ics` and `archive-plan.json` are review artifacts. `CLASS:PRIVATE` does not encrypt the plaintext ICS file, which may contain event text and source filenames. The user must protect and inspect it, then separately authorize any later action through an appropriate tool.
 
 ## Retention
 
