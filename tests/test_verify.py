@@ -151,6 +151,9 @@ class ManifestAssetTests(unittest.TestCase):
             "https://user@example.com/policy",
             "https://example.com/policy#fragment",
             "https://example.com/white space",
+            "https://example.com/back\\slash",
+            "https://example.com/bad%escape",
+            "https://example.com/truncated%2",
         )
         for value in bad_values:
             manifest = copy.deepcopy(self.manifest)
@@ -163,6 +166,31 @@ class ManifestAssetTests(unittest.TestCase):
                 ):
                     with self.assertRaisesRegex(verify.VerifyError, "valid HTTPS"):
                         verify.validate_manifest()
+
+    def test_https_url_rejects_backslashes_and_invalid_percent_escapes(self):
+        for value in (
+            "https://example.com/a\\b",
+            "https://example.com/%",
+            "https://example.com/%0",
+            "https://example.com/%GG",
+        ):
+            with self.subTest(value=value):
+                self.assertFalse(verify._is_valid_https_url(value))
+        self.assertTrue(verify._is_valid_https_url("https://example.com/a%20b"))
+
+
+class ArchivePathTests(unittest.TestCase):
+    def test_windows_superscript_device_names_are_rejected(self):
+        for name in ("COM¹", "COM².txt", "COM³.png", "LPT¹", "LPT².md", "LPT³"):
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(verify.VerifyError, "reserved"):
+                    verify.validate_archive_name(name)
+
+    def test_archive_validation_requires_complete_source_snapshot(self):
+        entries, payload = canonical_payload()
+        entries.pop(next(iter(entries)))
+        with self.assertRaisesRegex(verify.VerifyError, "exact package allowlist"):
+            verify._validate_archive_bytes(payload, source_entries=entries, smoke=False)
 
 
 class OutputPathTests(unittest.TestCase):

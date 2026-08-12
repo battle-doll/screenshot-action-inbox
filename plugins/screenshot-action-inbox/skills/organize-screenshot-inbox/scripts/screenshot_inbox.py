@@ -1463,14 +1463,6 @@ def _inventory_failure(action, relative=None, exc=None):
     return InboxError("%s: %s%s" % (action, location, suffix))
 
 
-def _normalize_windows_handle_path(value):
-    if value.startswith("\\\\?\\UNC\\"):
-        value = "\\\\" + value[8:]
-    elif value.startswith("\\\\?\\"):
-        value = value[4:]
-    return os.path.normcase(os.path.normpath(value))
-
-
 def _windows_file_information_api():
     if not _is_windows_platform():
         raise InboxError("Windows handle binding is unavailable on this platform")
@@ -1547,6 +1539,47 @@ def _windows_final_handle_path(api, handle):
         size = length + 1
 
 
+def _verify_windows_handle_identity(
+    api, handle, expected_identity, desired_access, share_mode, open_flags, label,
+    expect_directory,
+):
+    """Reopen a handle's canonical spelling and compare stable object identity.
+
+    Windows may report a long path for a handle opened through an equivalent
+    8.3 or differently-cased spelling.  The spellings are not an identity
+    boundary; the volume serial number and file index are.  Reopening the
+    handle-reported spelling with reparse traversal disabled also provides a
+    second identity observation without accepting a link target.
+    """
+    ctypes_module = api[0]
+    final_path = _windows_final_handle_path(api, handle)
+    verification_handle = api[3](
+        final_path,
+        desired_access,
+        share_mode,
+        None,
+        3,  # OPEN_EXISTING
+        open_flags,
+        None,
+    )
+    invalid_handle = ctypes_module.c_void_p(-1).value
+    if _windows_handle_value(ctypes_module, verification_handle) == invalid_handle:
+        raise ctypes_module.WinError(ctypes_module.get_last_error())
+    try:
+        information, actual_identity = _windows_handle_information(
+            api, verification_handle
+        )
+        is_directory = bool(information.dwFileAttributes & 0x10)
+        if information.dwFileAttributes & 0x400:
+            raise InboxError("%s reopened as a link or reparse point" % label)
+        if is_directory != expect_directory:
+            raise InboxError("%s reopened with a different file type" % label)
+        if actual_identity != expected_identity:
+            raise InboxError("%s identity changed while binding its handle" % label)
+    finally:
+        api[6](verification_handle)
+
+
 def _open_windows_directory_locks(path, label):
     """Pin each Windows directory component against rename/replacement."""
     api = _windows_file_information_api()
@@ -1583,7 +1616,8 @@ def _open_windows_directory_locks(path, label):
             if _windows_handle_value(ctypes_module, handle) == invalid_handle:
                 raise ctypes_module.WinError(ctypes_module.get_last_error())
             handles.append(handle)
-            information, final_identity = _windows_handle_information(api, handle)
+            information, component_identity = _windows_handle_information(api, handle)
+            final_identity = component_identity
             if information.dwFileAttributes & 0x400:
                 raise InboxError(
                     "%s must contain only existing non-link, non-reparse directories" % label
@@ -1592,11 +1626,16 @@ def _open_windows_directory_locks(path, label):
                 raise InboxError(
                     "%s must contain only existing non-link, non-reparse directories" % label
                 )
-            final_path = _windows_final_handle_path(api, handle)
-            if _normalize_windows_handle_path(final_path) != _normalize_windows_handle_path(
-                component_path
-            ):
-                raise InboxError("%s resolved outside its expected path" % label)
+            _verify_windows_handle_identity(
+                api,
+                handle,
+                component_identity,
+                file_read_attributes,
+                share_read_write,
+                backup_semantics | open_reparse_point,
+                label,
+                True,
+            )
         return (api, handles, final_identity)
     except (InboxError, OSError):
         for handle in reversed(handles):
@@ -1613,11 +1652,20 @@ def _close_windows_directory_locks(locks):
 
 
 def _open_windows_inventory_file(path):
-    """Open a Windows path itself, returning an fd and stable handle identity."""
+    """Open a Windows file and retain its pinned parent-directory handles.
+
+    The caller must close both the returned descriptor and directory locks.
+    Keeping every ancestor handle open without FILE_SHARE_DELETE prevents a
+    path component from being renamed or replaced through the hash/recheck
+    window.
+    """
     if not _is_windows_platform():
         raise InboxError("Windows handle binding is unavailable on this platform")
     import msvcrt
-    api = _windows_file_information_api()
+    parent_locks = _open_windows_directory_locks(
+        Path(path).parent, "inventory source parent"
+    )
+    api = parent_locks[0]
     ctypes_module = api[0]
 
     generic_read = 0x80000000
@@ -1625,34 +1673,46 @@ def _open_windows_inventory_file(path):
     open_existing = 3
     open_reparse_point = 0x00200000
     sequential_scan = 0x08000000
-    handle = api[3](
-        os.path.abspath(os.fspath(path)),
-        generic_read,
-        share_read_write,
-        None,
-        open_existing,
-        open_reparse_point | sequential_scan,
-        None,
-    )
-    invalid_handle = ctypes_module.c_void_p(-1).value
-    if _windows_handle_value(ctypes_module, handle) == invalid_handle:
-        raise ctypes_module.WinError(ctypes_module.get_last_error())
+    handle = None
     transferred = False
     try:
+        handle = api[3](
+            os.path.abspath(os.fspath(path)),
+            generic_read,
+            share_read_write,
+            None,
+            open_existing,
+            open_reparse_point | sequential_scan,
+            None,
+        )
+        invalid_handle = ctypes_module.c_void_p(-1).value
+        if _windows_handle_value(ctypes_module, handle) == invalid_handle:
+            handle = None
+            raise ctypes_module.WinError(ctypes_module.get_last_error())
         information, identity = _windows_handle_information(api, handle)
         if information.dwFileAttributes & 0x400:
             raise InboxError("inventory source is a link or reparse point")
-        final_path = _windows_final_handle_path(api, handle)
-        expected = _normalize_windows_handle_path(os.path.abspath(os.fspath(path)))
-        if _normalize_windows_handle_path(final_path) != expected:
-            raise InboxError("inventory source handle resolved outside its expected path")
+        if information.dwFileAttributes & 0x10:
+            raise InboxError("inventory source is not a plain regular file")
+        _verify_windows_handle_identity(
+            api,
+            handle,
+            identity,
+            generic_read,
+            share_read_write,
+            open_reparse_point | sequential_scan,
+            "inventory source",
+            False,
+        )
         flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
         descriptor = msvcrt.open_osfhandle(_windows_handle_value(ctypes_module, handle), flags)
         transferred = True
-        return descriptor, identity
+        return descriptor, identity, parent_locks
     finally:
-        if not transferred:
+        if handle is not None and not transferred:
             api[6](handle)
+        if not transferred:
+            _close_windows_directory_locks(parent_locks)
 
 
 def _hash_inventory_descriptor(descriptor, close_descriptor=True):
@@ -1889,9 +1949,13 @@ def inventory(root, recursive=False, include_hash=False):
                 windows_hash = _is_windows_platform()
                 descriptor = None
                 after_descriptor = None
+                source_locks = None
+                after_source_locks = None
                 try:
                     if windows_hash:
-                        descriptor, opened_identity = _open_windows_inventory_file(entry.path)
+                        descriptor, opened_identity, source_locks = (
+                            _open_windows_inventory_file(entry.path)
+                        )
                     else:
                         flags = (
                             os.O_RDONLY
@@ -1913,6 +1977,7 @@ def inventory(root, recursive=False, include_hash=False):
                 except (InboxError, OSError) as exc:
                     if descriptor is not None:
                         os.close(descriptor)
+                    _close_windows_directory_locks(source_locks)
                     raise _inventory_failure("cannot hash inventory source", relative, exc)
                 entry_compare = (
                     _source_metadata_key(entry_stat)
@@ -1925,12 +1990,14 @@ def inventory(root, recursive=False, include_hash=False):
                 if opened_compare != entry_compare:
                     if descriptor is not None:
                         os.close(descriptor)
+                    _close_windows_directory_locks(source_locks)
                     raise _inventory_failure("inventory source changed before hashing", relative)
                 try:
                     path_after_stat = os.lstat(entry.path)
                 except OSError as exc:
                     if descriptor is not None:
                         os.close(descriptor)
+                    _close_windows_directory_locks(source_locks)
                     raise _inventory_failure(
                         "inventory source changed during hashing", relative, exc
                     )
@@ -1946,19 +2013,27 @@ def inventory(root, recursive=False, include_hash=False):
                 ):
                     if descriptor is not None:
                         os.close(descriptor)
+                    _close_windows_directory_locks(source_locks)
                     raise _inventory_failure("inventory source changed during hashing", relative)
                 if windows_hash:
                     try:
-                        after_descriptor, after_identity = _open_windows_inventory_file(entry.path)
+                        after_descriptor, after_identity, after_source_locks = (
+                            _open_windows_inventory_file(entry.path)
+                        )
                     except (InboxError, OSError) as exc:
                         os.close(descriptor)
+                        _close_windows_directory_locks(source_locks)
                         raise _inventory_failure(
                             "inventory source changed during hashing", relative, exc
                         )
                     os.close(after_descriptor)
                     after_descriptor = None
+                    _close_windows_directory_locks(after_source_locks)
+                    after_source_locks = None
                     os.close(descriptor)
                     descriptor = None
+                    _close_windows_directory_locks(source_locks)
+                    source_locks = None
                     if opened_identity != after_identity:
                         raise _inventory_failure(
                             "inventory source identity changed during hashing", relative

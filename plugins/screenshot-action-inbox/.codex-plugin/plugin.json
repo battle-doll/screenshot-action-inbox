@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "Screenshot Action Inbox",
     "shortDescription": "Turn screenshots into actions",
-    "longDescription": "Turn batches of user-provided screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; tie every item to its source screenshot; group duplicates; mark uncertainty; and draft calendar-ready entries. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its bundled dependency-free processor reads only a structured observation file and writes deterministic local reports for review.",
+    "longDescription": "Turn batches of user-provided screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; tie every item to its source screenshot; group duplicates; mark uncertainty; and draft calendar-ready entries. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its dependency-free build and validation commands consume structured observations and write deterministic local reports for review; optional authorized inventory reads image bytes only when SHA-256 hashing is explicitly requested.",
     "developerName": "battle-doll",
     "category": "Productivity",
     "capabilities": [

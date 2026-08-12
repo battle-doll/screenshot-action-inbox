@@ -108,6 +108,8 @@ WINDOWS_RESERVED = {
     "CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$",
     *("COM%d" % number for number in range(1, 10)),
     *("LPT%d" % number for number in range(1, 10)),
+    *("COM%s" % number for number in ("¹", "²", "³")),
+    *("LPT%s" % number for number in ("¹", "²", "³")),
 }
 
 
@@ -342,6 +344,8 @@ def _is_valid_https_url(value):
     if not isinstance(value, str) or not value or len(value) > 1024:
         return False
     if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+        return False
+    if "\\" in value or re.search(r"%(?![0-9A-Fa-f]{2})", value):
         return False
     try:
         parsed = urlsplit(value)
@@ -780,6 +784,8 @@ def _validate_archive_bytes(payload, source_entries=None, smoke=True):
         fail("archive is empty or exceeds 100 MiB")
     if source_entries is None:
         source_entries = _snapshot_package_sources()
+    if not isinstance(source_entries, dict) or set(source_entries) != set(PACKAGE_SOURCES):
+        fail("source snapshot does not match the exact package allowlist")
     with zipfile.ZipFile(io.BytesIO(payload), "r") as archive:
         if archive.comment:
             fail("archive global comment is not canonical")

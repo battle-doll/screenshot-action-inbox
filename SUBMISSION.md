@@ -19,7 +19,7 @@ Short description:
 
 Long description:
 
-> Turn batches of user-provided screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; tie every item to its source screenshot; group duplicates; mark uncertainty; and draft calendar-ready entries. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its bundled dependency-free processor reads only a structured observation file and writes deterministic local reports for review.
+> Turn batches of user-provided screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; tie every item to its source screenshot; group duplicates; mark uncertainty; and draft calendar-ready entries. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its dependency-free build and validation commands consume structured observations and write deterministic local reports for review; optional authorized inventory reads image bytes only when SHA-256 hashing is explicitly requested.
 
 Starter prompts:
 
@@ -37,7 +37,7 @@ Starter prompts:
 | Telemetry/analytics/advertising | None |
 | Image processing | Host product visually inspects user-provided or user-authorized images |
 | Bundled processor input | Bounded, user-created UTF-8 observation JSON |
-| Bundled processor image access | None; it does not open screenshots or read EXIF |
+| Build/validate image access | None; these commands consume structured observation JSON and do not open screenshots or read EXIF |
 | Optional inventory | Lists relative filenames and sizes in an authorized folder; hashes bytes only with explicit `--hash` |
 | Writes | New local review artifacts in an explicit output directory |
 | External writes | None |
@@ -70,7 +70,7 @@ Upload `dist/screenshot-action-inbox-skills-only-1.0.0.zip` only after the aggre
 
 ## Review cases
 
-The exact five positive and three negative cases are in [`evals/cases.json`](evals/cases.json). All fixtures must be synthetic and sanitized. Expected outputs require source filenames, confidence, ambiguity markers, and explicit draft status.
+The exact five positive and three negative cases are in [`evals/cases.json`](evals/cases.json). All fixtures must be synthetic and sanitized. Expected outputs require source filenames, confidence, ambiguity markers, and explicit draft status. Calendar cases additionally require SHA-256-backed source provenance, `CLASS:PRIVATE`, and a stable source-bound UID; incomplete-source cases must remain visible in the digest and review counts.
 
 ## Submission sequence
 

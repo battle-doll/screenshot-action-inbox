@@ -12,7 +12,7 @@ The ChatGPT or Codex product in which the plugin runs may process user-provided 
 
 ## Local processing
 
-The bundled processor reads only a user-created structured observation JSON file. It does not open screenshot images, read EXIF metadata, access the network, inspect environment secrets, or discover unrelated files. It writes reports only to the output location selected in the user's environment.
+The bundled build and validation commands read only a user-created structured observation JSON file. They do not open screenshot images, read EXIF metadata, access the network, inspect environment secrets, or discover unrelated files. The build command writes reports only to the output location selected in the user's environment.
 
 The optional inventory command lists relative filenames and file sizes within an explicitly authorized folder. It skips links and reparse points. It does not open image contents unless the user explicitly selects the `--hash` option, which reads bytes solely to calculate a local SHA-256 value. Neither mode sends data to the developer.
 
@@ -26,7 +26,7 @@ The developer does not sell, share, or retain plugin data because the plugin sen
 
 ## User choices
 
-Users choose which screenshots to provide, may omit or redact any image, may inspect every generated artifact, and may delete generated files using their normal device or workspace controls. Archive and calendar outputs are drafts and are never applied automatically.
+Users choose which screenshots to provide, may omit or redact any image, may inspect every generated artifact, and may delete generated files using their normal device or workspace controls. Archive and calendar outputs are drafts and are never applied automatically. `CLASS:PRIVATE` is a calendar classification hint, not encryption or access control: `calendar.ics` remains a plaintext file and can contain event text and source filenames, so users should protect it as potentially sensitive.
 
 ## Contact
 

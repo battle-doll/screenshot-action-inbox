@@ -40,6 +40,34 @@ def safe_tempdir(prefix):
     return tempfile.TemporaryDirectory(prefix=prefix, dir=str(ROOT))
 
 
+def windows_path_spelling(path, api_name):
+    """Return a Win32 long or 8.3 spelling for an existing path."""
+    if os.name != "nt":
+        raise RuntimeError("Windows path spellings are only available on Windows")
+    import ctypes
+    from ctypes import wintypes
+
+    function = getattr(ctypes.WinDLL("kernel32", use_last_error=True), api_name)
+    function.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    function.restype = wintypes.DWORD
+    buffer = ctypes.create_unicode_buffer(32768)
+    length = function(os.fspath(path), buffer, len(buffer))
+    if not length:
+        raise ctypes.WinError(ctypes.get_last_error())
+    if length >= len(buffer):
+        raise RuntimeError("Windows path spelling exceeds the test buffer")
+    return Path(buffer.value)
+
+
+def windows_case_variant(path):
+    """Change the drive-letter case without changing the Windows object."""
+    value = os.fspath(path)
+    drive, tail = os.path.splitdrive(value)
+    if not drive or not drive[0].isalpha():
+        raise RuntimeError("test path does not use a drive-letter spelling")
+    return Path(drive[0].swapcase() + drive[1:] + tail)
+
+
 class ObservationTests(unittest.TestCase):
     def test_valid_fixture_builds_all_artifacts(self):
         data = inbox.validate_observations(load_fixture())
@@ -459,7 +487,9 @@ class FilesystemTests(unittest.TestCase):
                     inbox.inventory(raw, recursive=True)
 
     def test_all_skipped_inventory_paths_redact_sensitive_components(self):
-        sensitive = "password:supersecret"
+        # A colon creates an alternate data stream instead of a filename on
+        # Windows, so use a sensitive spelling that is a real filename there.
+        sensitive = "password=supersecret"
         with safe_tempdir("sai-redacted-skips-") as raw:
             root = Path(raw)
             paths = []
@@ -505,11 +535,17 @@ class FilesystemTests(unittest.TestCase):
             source = root / sensitive
             source.write_bytes(b"x")
             original_open = inbox.os.open
+            original_windows_open = inbox._open_windows_inventory_file
 
             def failing_open(path, flags, *args, **kwargs):
                 if path == sensitive and kwargs.get("dir_fd") is not None:
                     raise PermissionError("failed path %s" % sensitive)
                 return original_open(path, flags, *args, **kwargs)
+
+            def failing_windows_open(path):
+                if Path(path).name == sensitive:
+                    raise PermissionError("failed path %s" % sensitive)
+                return original_windows_open(path)
 
             actual_sensitive_check = inbox._assert_no_sensitive_value
             checks = {"count": 0}
@@ -521,6 +557,11 @@ class FilesystemTests(unittest.TestCase):
                 return actual_sensitive_check(text, label)
 
             with mock.patch.object(inbox.os, "open", side_effect=failing_open), \
+                    mock.patch.object(
+                        inbox,
+                        "_open_windows_inventory_file",
+                        side_effect=failing_windows_open,
+                    ), \
                     mock.patch.object(
                         inbox, "_assert_no_sensitive_value", side_effect=allow_validation_then_redact
                     ):
@@ -566,7 +607,7 @@ class FilesystemTests(unittest.TestCase):
             def fake_windows_open(path):
                 descriptors.append(real_open(str(path), os.O_RDONLY))
                 identity = (7, 101) if len(descriptors) == 1 else (7, 202)
-                return descriptors[-1], identity
+                return descriptors[-1], identity, None
 
             with mock.patch.object(inbox, "_secure_inventory_fds_available", return_value=False), \
                     mock.patch.object(inbox, "_is_windows_platform", return_value=True), \
@@ -576,6 +617,116 @@ class FilesystemTests(unittest.TestCase):
                     mock.patch.object(inbox, "_open_windows_inventory_file", side_effect=fake_windows_open):
                 with self.assertRaisesRegex(inbox.InboxError, "identity changed"):
                     inbox.inventory(root, include_hash=True)
+
+    def test_windows_handle_validation_compares_identity_not_path_text(self):
+        fake_ctypes = mock.Mock()
+        fake_ctypes.c_void_p.return_value.value = -1
+        create_file = mock.Mock(return_value=object())
+        close_handle = mock.Mock(return_value=True)
+        api = (fake_ctypes, None, None, create_file, None, None, close_handle)
+        information = mock.Mock(dwFileAttributes=0)
+        long_spelling = r"\\?\C:\Users\runneradmin\AppData\screen.png"
+
+        with mock.patch.object(
+            inbox, "_windows_final_handle_path", return_value=long_spelling
+        ), mock.patch.object(
+            inbox, "_windows_handle_value", return_value=101
+        ), mock.patch.object(
+            inbox,
+            "_windows_handle_information",
+            return_value=(information, (17, 9001)),
+        ):
+            inbox._verify_windows_handle_identity(
+                api,
+                object(),
+                (17, 9001),
+                0x80000000,
+                0x00000003,
+                0x00200000,
+                "inventory source",
+                False,
+            )
+            with self.assertRaisesRegex(inbox.InboxError, "identity changed"):
+                inbox._verify_windows_handle_identity(
+                    api,
+                    object(),
+                    (17, 9002),
+                    0x80000000,
+                    0x00000003,
+                    0x00200000,
+                    "inventory source",
+                    False,
+                )
+        self.assertEqual(create_file.call_args_list[0].args[0], long_spelling)
+        self.assertEqual(close_handle.call_count, 2)
+
+    @unittest.skipUnless(os.name == "nt", "Windows long/8.3 path coverage")
+    def test_windows_long_8dot3_and_case_directory_spellings_share_identity(self):
+        with tempfile.TemporaryDirectory(prefix="sai windows spelling ") as raw:
+            directory = Path(raw) / "Screenshot Action Inbox Long Directory"
+            directory.mkdir()
+            long_spelling = windows_path_spelling(directory, "GetLongPathNameW")
+            short_spelling = windows_path_spelling(long_spelling, "GetShortPathNameW")
+            if os.fspath(short_spelling) == os.fspath(long_spelling):
+                self.skipTest("8.3 path generation is disabled on this volume")
+            spellings = [
+                long_spelling,
+                short_spelling,
+                windows_case_variant(long_spelling),
+            ]
+            identities = []
+            for spelling in spellings:
+                locks = inbox._open_windows_directory_locks(
+                    spelling, "equivalent directory"
+                )
+                try:
+                    identities.append(locks[2])
+                finally:
+                    inbox._close_windows_directory_locks(locks)
+            self.assertEqual(len(set(identities)), 1)
+
+    @unittest.skipUnless(os.name == "nt", "Windows component pinning coverage")
+    def test_windows_directory_handle_prevents_component_rename(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-pin-") as raw:
+            root = Path(raw)
+            nested = root / "nested"
+            moved = root / "moved"
+            nested.mkdir()
+            locks = inbox._open_windows_directory_locks(nested, "pinned directory")
+            try:
+                with self.assertRaises(OSError):
+                    os.rename(str(nested), str(moved))
+                recheck = inbox._open_windows_directory_locks(
+                    nested, "pinned directory recheck"
+                )
+                try:
+                    self.assertEqual(locks[2], recheck[2])
+                finally:
+                    inbox._close_windows_directory_locks(recheck)
+            finally:
+                inbox._close_windows_directory_locks(locks)
+
+    @unittest.skipUnless(os.name == "nt", "Windows ancestor pinning coverage")
+    def test_windows_inventory_file_keeps_ancestors_pinned_until_closed(self):
+        with tempfile.TemporaryDirectory(prefix="sai-windows-ancestor-") as raw:
+            root = Path(raw)
+            ancestor = root / "ancestor"
+            nested = ancestor / "nested"
+            moved = root / "moved"
+            nested.mkdir(parents=True)
+            source = nested / "screen.png"
+            source.write_bytes(b"safe")
+            descriptor, unused_identity, locks = inbox._open_windows_inventory_file(
+                source
+            )
+            try:
+                with self.assertRaises(OSError):
+                    os.rename(str(ancestor), str(moved))
+                with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                    self.assertEqual(handle.read(), b"safe")
+            finally:
+                os.close(descriptor)
+                inbox._close_windows_directory_locks(locks)
 
     @unittest.skipUnless(os.name == "nt", "Windows junction coverage")
     def test_windows_junction_root_is_rejected(self):
@@ -619,17 +770,31 @@ class FilesystemTests(unittest.TestCase):
             self.assertEqual([row["relative_path"] for row in result["sources"]], ["nested/screen.png"])
             self.assertIn((root.name, "inventory root"), calls)
             self.assertIn(("nested", "inventory directory"), calls)
+            self.assertIn(("nested", "inventory source parent"), calls)
 
     @unittest.skipUnless(os.name == "nt", "Windows stable handle identity coverage")
     def test_windows_inventory_handle_identity_is_stable_for_real_file(self):
         with tempfile.TemporaryDirectory(prefix="sai-windows-handle-") as raw:
             source = Path(raw) / "screen.png"
             source.write_bytes(b"safe")
-            first_fd, first_identity = inbox._open_windows_inventory_file(source)
-            os.close(first_fd)
-            second_fd, second_identity = inbox._open_windows_inventory_file(source)
-            os.close(second_fd)
-            self.assertEqual(first_identity, second_identity)
+            long_spelling = windows_path_spelling(source, "GetLongPathNameW")
+            short_spelling = windows_path_spelling(long_spelling, "GetShortPathNameW")
+            spellings = [long_spelling, windows_case_variant(long_spelling)]
+            if os.fspath(short_spelling) != os.fspath(long_spelling):
+                spellings.append(short_spelling)
+            identities = []
+            for spelling in spellings:
+                descriptor, identity, locks = inbox._open_windows_inventory_file(
+                    spelling
+                )
+                try:
+                    with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                        self.assertEqual(handle.read(), b"safe")
+                finally:
+                    os.close(descriptor)
+                    inbox._close_windows_directory_locks(locks)
+                identities.append(identity)
+            self.assertEqual(len(set(identities)), 1)
 
     def test_dangling_output_links_are_never_replaced(self):
         data = inbox.validate_observations(load_fixture())
