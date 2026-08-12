@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#f5f3ff"/>
+  <rect x="310" y="45" width="580" height="630" rx="18" fill="white" stroke="#7777aa" stroke-width="3"/>
+  <text x="420" y="135" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#27277a">SAMPLE MARKET</text>
+  <text x="390" y="205" font-family="Arial, sans-serif" font-size="25" fill="#252535">Receipt date: August 12, 2026</text>
+  <line x1="365" y1="245" x2="835" y2="245" stroke="#d7d7e5" stroke-width="2"/>
+  <text x="380" y="315" font-family="Arial, sans-serif" font-size="26" fill="#252535">Office supplies</text>
+  <text x="720" y="315" font-family="Arial, sans-serif" font-size="26" fill="#252535">KRW 12,900</text>
+  <line x1="365" y1="360" x2="835" y2="360" stroke="#d7d7e5" stroke-width="2"/>
+  <text x="380" y="435" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f766e">TOTAL</text>
+  <text x="690" y="435" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f766e">KRW 12,900</text>
+  <text x="395" y="565" font-family="Arial, sans-serif" font-size="21" fill="#62627a">Synthetic fixture - no card or account number.</text>
+</svg>

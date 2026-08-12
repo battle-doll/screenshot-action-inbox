@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#eff6ff"/>
+  <rect x="80" y="90" width="1040" height="540" rx="28" fill="white" stroke="#2563eb" stroke-width="4"/>
+  <text x="140" y="185" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#2563eb">Synthetic note</text>
+  <text x="140" y="300" font-family="Arial, sans-serif" font-size="38" fill="#252535">Team lunch tomorrow at 12?</text>
+  <text x="140" y="390" font-family="Arial, sans-serif" font-size="28" fill="#252535">Location: TBD</text>
+  <text x="140" y="510" font-family="Arial, sans-serif" font-size="23" fill="#62627a">No reference date, year, or timezone is visible.</text>
+</svg>

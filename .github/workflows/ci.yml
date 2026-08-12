@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONNOUSERSITE: "1"
+
+jobs:
+  verify:
+    name: ${{ matrix.id }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.9", id: ubuntu-py39 }
+          - { os: ubuntu-latest, python: "3.10", id: ubuntu-py310 }
+          - { os: ubuntu-latest, python: "3.11", id: ubuntu-py311 }
+          - { os: ubuntu-latest, python: "3.12", id: ubuntu-py312 }
+          - { os: ubuntu-latest, python: "3.13", id: ubuntu-py313 }
+          - { os: ubuntu-latest, python: "3.14", id: ubuntu-py314 }
+          - { os: macos-15-intel, python: "3.9", id: macos-intel-py39 }
+          - { os: macos-latest, python: "3.14", id: macos-py314 }
+          - { os: windows-latest, python: "3.9", id: windows-py39 }
+          - { os: windows-latest, python: "3.14", id: windows-py314 }
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python }}
+          check-latest: true
+
+      - name: Show runtime
+        run: python -VV
+
+      - name: Validate, test, and build twice
+        run: python -X utf8 scripts/verify.py all
+
+      - name: Generate runtime artifact evidence
+        run: python -X utf8 scripts/verify.py runtime-evidence
+
+      - name: Upload exact release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.id }}
+          path: |
+            dist/screenshot-action-inbox-skills-only-1.0.0.zip
+            dist/screenshot-action-inbox-skills-only-1.0.0.zip.sha256
+            dist/runtime-artifact-evidence.json
+          compression-level: 0
+          retention-days: 7
+
+  cross-platform-reproducibility:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14"
+
+      - name: Download matrix artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: matrix-artifacts
+
+      - name: Require identical ZIP and runtime artifacts from every matrix member
+        run: python -X utf8 scripts/verify.py compare-matrix matrix-artifacts --expect-count 10
+
+      - name: Upload canonical cross-platform candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: screenshot-action-inbox-release
+          path: |
+            dist/screenshot-action-inbox-skills-only-1.0.0.zip
+            dist/screenshot-action-inbox-skills-only-1.0.0.zip.sha256
+            dist/cross-platform-reproducibility.json
+          compression-level: 0
+          retention-days: 14

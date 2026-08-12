@@ -1,0 +1,7 @@
+interface:
+  display_name: "Organize Screenshot Inbox"
+  short_description: "Turn screenshots into sourced, reviewable actions"
+  default_prompt: "Use $organize-screenshot-inbox to turn these screenshots into sourced actions and calendar drafts for review."
+
+policy:
+  allow_implicit_invocation: true

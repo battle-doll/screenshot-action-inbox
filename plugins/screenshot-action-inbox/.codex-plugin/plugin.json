@@ -1,0 +1,46 @@
+{
+  "name": "screenshot-action-inbox",
+  "version": "1.0.0",
+  "description": "Turn screenshot batches into a source-linked action inbox and reviewable calendar drafts.",
+  "author": {
+    "name": "battle-doll",
+    "url": "https://github.com/battle-doll"
+  },
+  "homepage": "https://github.com/battle-doll/screenshot-action-inbox#readme",
+  "repository": "https://github.com/battle-doll/screenshot-action-inbox",
+  "license": "Apache-2.0",
+  "keywords": [
+    "screenshots",
+    "productivity",
+    "action-items",
+    "calendar",
+    "inbox"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Screenshot Action Inbox",
+    "shortDescription": "Turn screenshots into actions",
+    "longDescription": "Turn batches of user-provided screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; tie every item to its source screenshot; group duplicates; mark uncertainty; and draft calendar-ready entries. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its bundled dependency-free processor reads only a structured observation file and writes deterministic local reports for review.",
+    "developerName": "battle-doll",
+    "category": "Productivity",
+    "capabilities": [
+      "Extract action items from screenshots",
+      "Link every item to source screenshots",
+      "Group duplicates and related items",
+      "Surface dates, amounts, and uncertainty",
+      "Draft reviewable calendar entries",
+      "Propose reversible screenshot archiving"
+    ],
+    "websiteURL": "https://github.com/battle-doll/screenshot-action-inbox",
+    "privacyPolicyURL": "https://github.com/battle-doll/screenshot-action-inbox/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/battle-doll/screenshot-action-inbox/blob/main/TERMS.md",
+    "defaultPrompt": [
+      "Turn these screenshots into a sourced action inbox and flag anything uncertain.",
+      "Extract tasks and dates, group duplicates, and draft calendar entries for review.",
+      "Prioritize this screenshot batch and show the source for every proposed action."
+    ],
+    "brandColor": "#27277A",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
+}

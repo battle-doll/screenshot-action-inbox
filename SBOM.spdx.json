@@ -1,0 +1,33 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+    "created": "2026-08-13T00:00:00Z",
+    "creators": [
+      "Person: battle-doll"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://github.com/battle-doll/screenshot-action-inbox/sbom/1.0.0",
+  "name": "screenshot-action-inbox-1.0.0",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-ScreenshotActionInbox",
+      "copyrightText": "Copyright 2026 battle-doll",
+      "downloadLocation": "https://github.com/battle-doll/screenshot-action-inbox",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "name": "screenshot-action-inbox",
+      "supplier": "Person: battle-doll",
+      "versionInfo": "1.0.0"
+    }
+  ],
+  "relationships": [
+    {
+      "relatedSpdxElement": "SPDXRef-Package-ScreenshotActionInbox",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    }
+  ],
+  "spdxVersion": "SPDX-2.3"
+}

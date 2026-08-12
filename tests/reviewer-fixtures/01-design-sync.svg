@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#f7f7fb"/>
+  <rect x="80" y="70" width="1040" height="580" rx="28" fill="white" stroke="#27277a" stroke-width="4"/>
+  <text x="140" y="155" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#27277a">Design Sync</text>
+  <text x="140" y="225" font-family="Arial, sans-serif" font-size="28" fill="#252535">August 20, 2026</text>
+  <text x="140" y="280" font-family="Arial, sans-serif" font-size="28" fill="#252535">6:30 PM - 8:00 PM KST (UTC+09:00)</text>
+  <text x="140" y="335" font-family="Arial, sans-serif" font-size="28" fill="#252535">Community Hall A</text>
+  <line x1="140" y1="385" x2="1060" y2="385" stroke="#d7d7e5" stroke-width="3"/>
+  <text x="140" y="455" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#0f766e">Action for Alex</text>
+  <text x="140" y="510" font-family="Arial, sans-serif" font-size="28" fill="#252535">Bring the clickable prototype.</text>
+  <text x="140" y="580" font-family="Arial, sans-serif" font-size="22" fill="#62627a">Synthetic reviewer fixture - no real people or event.</text>
+</svg>

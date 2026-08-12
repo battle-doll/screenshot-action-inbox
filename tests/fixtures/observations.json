@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-13T09:00:00+09:00",
+  "batch_title": "주간 스크린샷 인박스",
+  "sources": [
+    {
+      "id": "src-001",
+      "relative_path": "회의/스크린샷 2026-08-12.png",
+      "capture_date": "2026-08-12",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "archive_recommendation": "archive",
+      "archive_bucket": "events",
+      "status": "reviewed"
+    },
+    {
+      "id": "src-002",
+      "relative_path": "영수증/cafe receipt.png",
+      "capture_date": "2026-08-12",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "archive_recommendation": "archive",
+      "archive_bucket": "receipts",
+      "status": "reviewed"
+    },
+    {
+      "id": "src-003",
+      "relative_path": "참고/blurred note.png",
+      "capture_date": null,
+      "sha256": null,
+      "archive_recommendation": "review",
+      "archive_bucket": "unknown",
+      "status": "unreadable"
+    }
+  ],
+  "items": [
+    {
+      "id": "item-001",
+      "category": "action",
+      "title": "Confirm venue",
+      "details": "Reply after checking availability.",
+      "source_ids": ["src-001"],
+      "evidence": "Visible message asks for confirmation by Friday.",
+      "confidence": "high",
+      "priority": "high",
+      "owner": null,
+      "due": "2026-08-14",
+      "amount": null,
+      "calendar": null,
+      "duplicate_group": null,
+      "status": "open"
+    },
+    {
+      "id": "item-002",
+      "category": "event",
+      "title": "Community planning meeting",
+      "details": "Planning session shown in the invitation.",
+      "source_ids": ["src-001"],
+      "evidence": "Invitation visibly shows August 20, 18:30 to 20:00 KST.",
+      "confidence": "high",
+      "priority": "medium",
+      "owner": null,
+      "due": "2026-08-20T18:30:00+09:00",
+      "amount": null,
+      "calendar": {
+        "status": "draft",
+        "start": "2026-08-20T18:30:00+09:00",
+        "end": "2026-08-20T20:00:00+09:00",
+        "location": "Community Hall"
+      },
+      "duplicate_group": null,
+      "status": "open"
+    },
+    {
+      "id": "item-003",
+      "category": "receipt",
+      "title": "Cafe receipt",
+      "details": "Reviewable purchase record; settlement is not verified.",
+      "source_ids": ["src-002"],
+      "evidence": "Visible receipt shows KRW 12,900.",
+      "confidence": "high",
+      "priority": "low",
+      "owner": null,
+      "due": null,
+      "amount": {
+        "value": "12900",
+        "currency": "KRW"
+      },
+      "calendar": null,
+      "duplicate_group": null,
+      "status": "reference"
+    },
+    {
+      "id": "item-004",
+      "category": "unknown",
+      "title": "Unreadable note",
+      "details": null,
+      "source_ids": ["src-003"],
+      "evidence": "Text is too blurred to read reliably.",
+      "confidence": "low",
+      "priority": "unknown",
+      "owner": null,
+      "due": null,
+      "amount": null,
+      "calendar": {
+        "status": "needs_review",
+        "location": null
+      },
+      "duplicate_group": null,
+      "status": "needs_review"
+    }
+  ],
+  "questions": [
+    "What does the blurred note in src-003 say?"
+  ]
+}
