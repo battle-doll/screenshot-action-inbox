@@ -26,7 +26,7 @@ Trust boundaries are:
 | ICS property injection or disclosure | Escape values, reject controls, emit a private allowlisted VEVENT subset, use CRLF and octet-aware folding, and omit attendees, organizers, alarms, URLs, and METHOD. |
 | Archive damage | Emit `PLAN_ONLY`, `dry_run: true`, `executed: false`; include no executor or shell command. |
 | Hostile JSON | Reject duplicate keys, unknown fields, non-finite values, excessive size/depth/counts, wrong types, invalid IDs, and missing provenance. |
-| Partial or nondeterministic output | Stage a complete new output directory, use canonical serialization, source-hash-derived calendar IDs, explicit time input, a frozen Unicode policy, and no ambient randomness in final artifacts. |
+| Partial or nondeterministic output | Use canonical serialization, source-hash-derived calendar IDs, explicit time input, a frozen Unicode policy, and no ambient randomness in final artifacts. The release verifier uses descriptor- or handle-bound no-reparse writes and fails closed when a Windows target already exists with different bytes. |
 | Privilege drift | Ship Skills only; adding MCP, hooks, apps, network, or external writes requires a new security review and release. |
 
 ## Residual risk
