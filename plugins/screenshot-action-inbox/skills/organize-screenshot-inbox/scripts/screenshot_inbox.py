@@ -922,7 +922,7 @@ def build_artifacts(data):
         warning_codes.append("NO_EXPORTABLE_CALENDAR_DRAFTS")
     receipt = {
         "schema_version": SCHEMA_VERSION,
-        "processor": "screenshot-action-inbox/1.0.0",
+        "processor": "screenshot-action-inbox/1.0.1",
         "canonical_input_sha256": _hash_bytes(canonical_input),
         "generated_at": data["generated_at"],
         "counts": {
