@@ -1,6 +1,6 @@
 {
   "name": "screenshot-action-inbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Turn screenshot batches into a source-linked action inbox and reviewable calendar drafts.",
   "author": {
     "name": "battle-doll",

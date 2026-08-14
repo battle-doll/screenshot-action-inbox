@@ -68,8 +68,8 @@ jobs:
         with:
           name: release-${{ matrix.id }}
           path: |
-            dist/screenshot-action-inbox-skills-only-1.0.0.zip
-            dist/screenshot-action-inbox-skills-only-1.0.0.zip.sha256
+            dist/screenshot-action-inbox-skills-only-1.0.1.zip
+            dist/screenshot-action-inbox-skills-only-1.0.1.zip.sha256
             dist/runtime-artifact-evidence.json
           compression-level: 0
           retention-days: 7
@@ -106,8 +106,8 @@ jobs:
         with:
           name: screenshot-action-inbox-release
           path: |
-            dist/screenshot-action-inbox-skills-only-1.0.0.zip
-            dist/screenshot-action-inbox-skills-only-1.0.0.zip.sha256
+            dist/screenshot-action-inbox-skills-only-1.0.1.zip
+            dist/screenshot-action-inbox-skills-only-1.0.1.zip.sha256
             dist/cross-platform-reproducibility.json
           compression-level: 0
           retention-days: 14

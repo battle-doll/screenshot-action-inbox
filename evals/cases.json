@@ -1,6 +1,6 @@
 {
   "plugin": "screenshot-action-inbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "fixture_policy": "Use synthetic screenshots only. Never use reviewer or customer personal data.",
   "positive": [
     {
