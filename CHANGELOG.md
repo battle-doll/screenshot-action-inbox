@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 - 2026-08-15
+
+- Add equivalent English, Korean, Japanese, Simplified Chinese, and Russian README documentation with a shared language switcher.
+- Document platform-specific `python3` and `py -3` verification commands.
+- Refresh release, submission, evaluation, SBOM, and reproducible-package metadata for the multilingual patch release.
+
 ## 1.0.0 - 2026-08-13
 
 - Add the source-linked screenshot triage skill.
