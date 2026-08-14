@@ -4,13 +4,14 @@
 
 - Plugin: Screenshot Action Inbox
 - Package: `screenshot-action-inbox`
-- Version: 1.0.0
+- Version: 1.0.1
 - Developer: `battle-doll`
 - Category: Productivity
 - Submission type: Skills only
 - Authentication: None
 - Availability target: Global, subject to publisher verification and policy confirmation
 - Listing language: English
+- Documentation languages: English, Korean, Japanese, Simplified Chinese, and Russian
 - Tested content and filenames: English and Korean; processor supports UTF-8 generally
 
 Short description:
@@ -29,7 +30,7 @@ Starter prompts:
 
 ## Data-use declaration
 
-| Area | Version 1.0.0 behavior |
+| Area | Version 1.0.1 behavior |
 | --- | --- |
 | Accounts/authentication | None |
 | Publisher server | None |
@@ -66,7 +67,7 @@ Release gates:
 - identical hashes and byte lengths for all five runtime artifacts across the ten-job CI matrix;
 - exact Skills-only profile with no MCP, app, hook, or screenshot configuration.
 
-Upload `dist/screenshot-action-inbox-skills-only-1.0.0.zip` only after the aggregate CI job passes for the exact commit being submitted.
+Upload `dist/screenshot-action-inbox-skills-only-1.0.1.zip` only after the aggregate CI job passes for the exact commit being submitted.
 
 ## Review cases
 
@@ -90,4 +91,4 @@ Draft creation, ZIP upload, completed skill scans, review submission, approval, 
 
 ## Release notes
 
-> Initial Skills-only submission. Screenshot Action Inbox turns user-provided screenshot batches into source-linked actions, dates, events, receipt notes, and references. It flags ambiguity, generates review-only calendar and archive drafts, and includes no MCP server, app connector, authentication, telemetry, or external write actions. Its dependency-free processor is tested on Windows, macOS, and Linux.
+> Multilingual documentation patch. Screenshot Action Inbox now provides equivalent English, Korean, Japanese, Simplified Chinese, and Russian README documentation. Its Skills-only behavior remains unchanged: it turns user-provided screenshot batches into source-linked actions, dates, events, receipt notes, and references; flags ambiguity; generates review-only calendar and archive drafts; and includes no MCP server, app connector, authentication, telemetry, or external write actions. Its dependency-free processor is tested on Windows, macOS, and Linux.
