@@ -22,6 +22,14 @@ The plugin is intentionally conservative:
 - `archive-plan.json`
 - `receipt.json`
 
+## Code ontology
+
+Explore the repository through the [interactive code ontology graph](docs/code-ontology/index.html). The self-contained workbench supports search, a bounded 2D structure view, an optional 3D constellation, and source-evidence inspection. Download the HTML file and open it locally in a browser; GitHub's file viewer displays HTML source instead of running the workbench.
+
+The graph was generated with [Code Ontology Companion](https://github.com/battle-doll/code-ontology-companion) 0.5.2 from source revision `b42d168b6d45213edb886b683ac5c5ec06942454` (snapshot `20260815T090018Z-49018a955a1c`). It contains 940 nodes and 2,756 relationships with no parse warnings.
+
+The graph retains symbol identifiers, repository-relative paths, line spans, and qualitative static-analysis evidence. It does not contain source bodies, comments, local absolute paths, per-source file fingerprints, credentials, or model output. Relationships are navigation evidence, not a runtime trace, safety verdict, or proof of causation.
+
 ## Local development
 
 Run the complete verification suite:
