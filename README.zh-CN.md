@@ -22,6 +22,14 @@ Screenshot Action Inbox 是一款适用于 ChatGPT 和 Codex 的 Skills-only 插
 - `archive-plan.json`
 - `receipt.json`
 
+## 代码本体
+
+可通过[交互式代码本体图](docs/code-ontology/index.html)探索仓库结构。这个自包含工作台支持搜索、有界的 2D 结构视图、可选的 3D 星座视图以及源码证据查看。GitHub 文件查看器不会运行 HTML，而只会显示源码，因此请下载该文件并在本地浏览器中打开。
+
+该图由 [Code Ontology Companion](https://github.com/battle-doll/code-ontology-companion) 0.5.2 基于源码修订版 `b42d168b6d45213edb886b683ac5c5ec06942454` 生成（快照 `20260815T090018Z-49018a955a1c`），包含 940 个节点和 2,756 条关系，且没有解析警告。
+
+图中保留了符号标识符、仓库相对路径、行范围和定性的静态分析证据；不包含源码正文、注释、本地绝对路径、逐文件源码指纹、凭据或模型输出。这些关系是用于代码导航的证据，不是运行时跟踪、安全性结论或因果关系证明。
+
 ## 本地开发
 
 运行完整验证套件：
