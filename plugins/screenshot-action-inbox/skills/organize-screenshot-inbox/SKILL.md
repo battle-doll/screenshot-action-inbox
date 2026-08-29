@@ -1,6 +1,6 @@
 ---
 name: organize-screenshot-inbox
-description: Turn a user-authorized batch of screenshots or screen captures into a source-linked action inbox, including tasks, dates, events, receipts, reference items, duplicate groups, uncertainty flags, calendar drafts, and a non-executing archive plan. Use when a user asks to review, triage, organize, summarize, or extract actionable information from multiple screenshots, a screenshot folder, or a screenshot ZIP. Do not use for a single-image creative edit, general OCR transcription, email inbox triage, surveillance, identity inference, or hidden file operations.
+description: Organize a user-authorized batch, folder, or ZIP of screenshots into source-linked actions, dates, events, receipts, references, duplicate groups, uncertainty flags, review-only calendar drafts, and a non-executing archive plan. Use for requests such as “organize these screenshots,” “extract tasks and dates,” “group duplicate actions,” or “show the source for each next step.” Do not use for single-image creative edits, OCR-only transcription, email triage, surveillance or identity inference, code architecture or impact analysis, voice notifications, hidden file operations, or requests to create events, send messages, move files, or delete files.
 ---
 
 # Organize Screenshot Inbox
