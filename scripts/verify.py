@@ -1410,7 +1410,7 @@ def validate_processor_boundary(source_entries=None):
 
 def _validate_evaluations(cases):
     if not isinstance(cases, dict) or set(cases) != {
-        "plugin", "version", "fixture_policy", "positive", "negative"
+        "plugin", "version", "fixture_policy", "positive", "negative", "discovery"
     }:
         fail("evaluation file has incomplete or unsupported top-level fields")
     if cases["plugin"] != PACKAGE_NAME or cases["version"] != VERSION:
@@ -1455,6 +1455,55 @@ def _validate_evaluations(cases):
                 if key in normalized_expected:
                     fail("evaluation expected outcomes must be unique: %s" % case_id)
                 normalized_expected.add(key)
+
+    discovery = cases["discovery"]
+    if not isinstance(discovery, dict) or set(discovery) != {
+        "purpose", "direct", "indirect", "negative"
+    }:
+        fail("discovery evaluations have incomplete or unsupported fields")
+    if not isinstance(discovery["purpose"], str) or not discovery["purpose"].strip():
+        fail("discovery evaluation purpose is required")
+    expected_counts = {"direct": 10, "indirect": 20, "negative": 20}
+    for group, expected_count in expected_counts.items():
+        group_cases = discovery[group]
+        if not isinstance(group_cases, list) or len(group_cases) != expected_count:
+            fail("discovery %s evaluations must contain exactly %d cases" % (group, expected_count))
+        languages = set()
+        expected_selection = group != "negative"
+        for case in group_cases:
+            if not isinstance(case, dict) or set(case) != {
+                "id", "language", "prompt", "expected_plugin", "expected_skill"
+            }:
+                fail("discovery cases have incomplete or unsupported fields")
+            case_id = case["id"]
+            if (
+                not isinstance(case_id, str)
+                or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", case_id)
+                or not case_id.startswith(group + "-")
+                or case_id in seen_ids
+            ):
+                fail("discovery IDs must be valid, group-prefixed, and unique")
+            seen_ids.add(case_id)
+            language = case["language"]
+            if language not in {"en", "ko"}:
+                fail("discovery language must be en or ko: %s" % case_id)
+            languages.add(language)
+            prompt = case["prompt"]
+            if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 1024 or "\n" in prompt:
+                fail("discovery prompt is missing or invalid: %s" % case_id)
+            prompt_key = " ".join(unicodedata.normalize("NFC", prompt).split()).casefold()
+            if prompt_key in seen_prompts:
+                fail("discovery prompts must be unique")
+            seen_prompts.add(prompt_key)
+            if (
+                type(case["expected_plugin"]) is not bool
+                or type(case["expected_skill"]) is not bool
+                or case["expected_plugin"] is not expected_selection
+                or case["expected_skill"] is not expected_selection
+            ):
+                fail("discovery selection expectation is invalid: %s" % case_id)
+        if languages != {"en", "ko"}:
+            fail("discovery %s evaluations must include English and Korean" % group)
     return cases
 
 
