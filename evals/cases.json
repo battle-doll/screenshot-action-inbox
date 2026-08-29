@@ -1,6 +1,6 @@
 {
   "plugin": "screenshot-action-inbox",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "fixture_policy": "Use synthetic screenshots only. Never use reviewer or customer personal data.",
   "positive": [
     {
@@ -95,5 +95,64 @@
         "State the Skills-only no-external-write and no-destructive-action boundary"
       ]
     }
-  ]
+  ],
+  "discovery": {
+    "purpose": "Bilingual golden cases for plugin and skill selection only; they do not authorize file access or external actions.",
+    "direct": [
+      {"id": "direct-en-01", "language": "en", "prompt": "Use Screenshot Action Inbox to organize these screenshots into sourced next steps.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-en-02", "language": "en", "prompt": "Run Screenshot Action Inbox on this screenshot folder and group duplicate tasks.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-en-03", "language": "en", "prompt": "Use $organize-screenshot-inbox to extract dates and flag anything uncertain.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-en-04", "language": "en", "prompt": "With Screenshot Action Inbox, draft calendar entries for review from this image batch.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-en-05", "language": "en", "prompt": "Ask Screenshot Action Inbox to show the source screenshot for every proposed action.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-ko-01", "language": "ko", "prompt": "Screenshot Action Inbox로 이 스크린샷들을 출처가 있는 할 일로 정리해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-ko-02", "language": "ko", "prompt": "$organize-screenshot-inbox로 중복 작업을 묶고 불확실한 날짜를 표시해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-ko-03", "language": "ko", "prompt": "Screenshot Action Inbox를 사용해서 이 이미지 ZIP의 작업과 참고 항목을 분류해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-ko-04", "language": "ko", "prompt": "Screenshot Action Inbox로 검토용 캘린더 초안을 만들고 실제 등록은 하지 마.", "expected_plugin": true, "expected_skill": true},
+      {"id": "direct-ko-05", "language": "ko", "prompt": "Screenshot Action Inbox가 제안한 각 작업의 원본 파일명을 보여줘.", "expected_plugin": true, "expected_skill": true}
+    ],
+    "indirect": [
+      {"id": "indirect-en-01", "language": "en", "prompt": "Turn this folder of meeting screenshots into a task list with the source filename beside each item.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-02", "language": "en", "prompt": "I saved the same follow-up in several screen captures; group the duplicates without losing their sources.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-03", "language": "en", "prompt": "Review these screenshots for tasks, dates, receipts, and reference-only notes.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-04", "language": "en", "prompt": "Make a weekly action digest from this screenshot ZIP and call out unreadable details.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-05", "language": "en", "prompt": "Draft calendar items from these invitations, but leave ambiguous times for me to review.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-06", "language": "en", "prompt": "Prioritize the next steps visible across these screenshots and cite where each one came from.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-07", "language": "en", "prompt": "Separate the purchases, explicit follow-ups, and useful references in this batch of screen captures.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-08", "language": "en", "prompt": "Build a reviewable action inbox from these images without changing or moving the originals.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-09", "language": "en", "prompt": "These screenshots disagree about a due date; preserve both claims and tell me what needs confirmation.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-en-10", "language": "en", "prompt": "Create sourced CSV and private calendar drafts from this authorized screenshot batch for my review.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-01", "language": "ko", "prompt": "회의 스크린샷 폴더를 파일명 출처가 붙은 할 일 목록으로 정리해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-02", "language": "ko", "prompt": "여러 캡처에 반복된 후속 작업을 출처를 잃지 않게 중복 그룹으로 묶어줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-03", "language": "ko", "prompt": "이 스크린샷 묶음에서 작업, 날짜, 영수증, 참고 정보만 구분해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-04", "language": "ko", "prompt": "스크린샷 ZIP을 주간 작업 요약으로 만들고 읽기 어려운 부분은 추측하지 마.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-05", "language": "ko", "prompt": "초대장 캡처에서 캘린더 초안을 만들되 시간이 모호하면 검토 필요로 남겨줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-06", "language": "ko", "prompt": "이 캡처들에 보이는 다음 행동을 우선순위로 정리하고 각각의 출처를 표시해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-07", "language": "ko", "prompt": "스크린샷 속 결제 내역, 명시된 후속 조치, 단순 참고 카드를 따로 분류해줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-08", "language": "ko", "prompt": "원본 파일을 건드리지 말고 이 이미지들로 검토 가능한 작업함을 만들어줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-09", "language": "ko", "prompt": "마감일이 서로 다른 두 스크린샷을 모두 보존하고 무엇을 확인해야 하는지 알려줘.", "expected_plugin": true, "expected_skill": true},
+      {"id": "indirect-ko-10", "language": "ko", "prompt": "승인한 스크린샷 묶음에서 출처가 있는 CSV와 비공개 캘린더 초안을 준비해줘.", "expected_plugin": true, "expected_skill": true}
+    ],
+    "negative": [
+      {"id": "negative-en-01", "language": "en", "prompt": "Remove the background from this one screenshot and make it look cinematic.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-02", "language": "en", "prompt": "Transcribe every word in this single image exactly as plain text.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-03", "language": "en", "prompt": "Triage my email inbox, reply to urgent messages, and archive the rest.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-04", "language": "en", "prompt": "Monitor these security-camera screenshots and identify the person who appears most often.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-05", "language": "en", "prompt": "Infer this person's age, ethnicity, and medical condition from the photo.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-06", "language": "en", "prompt": "From these code screenshots, map the software architecture and possible change impact of OrderService.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-07", "language": "en", "prompt": "Configure a female Korean voice alert for Codex when a task finishes.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-08", "language": "en", "prompt": "Create all detected calendar events and message every attendee now.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-09", "language": "en", "prompt": "Move every processed screenshot into an archive folder and delete duplicates.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-en-10", "language": "en", "prompt": "Read screenshots from every folder on this computer without asking me which folder is authorized.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-01", "language": "ko", "prompt": "이 스크린샷 한 장의 배경을 지우고 영화 포스터처럼 편집해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-02", "language": "ko", "prompt": "이 이미지 한 장의 글자를 빠짐없이 그대로 OCR 전사해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-03", "language": "ko", "prompt": "내 이메일 받은편지함을 분류하고 급한 메일에는 답장해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-04", "language": "ko", "prompt": "CCTV 캡처를 감시해서 가장 자주 등장한 사람의 신원을 찾아줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-05", "language": "ko", "prompt": "이 사진만 보고 인물의 나이, 인종, 질병 여부를 추정해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-06", "language": "ko", "prompt": "코드 스크린샷을 보고 시스템 아키텍처와 OrderService 변경 영향을 분석해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-07", "language": "ko", "prompt": "Codex 작업이 끝나면 한국어 여성 음성 알림이 나오도록 설정해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-08", "language": "ko", "prompt": "찾은 일정을 실제 캘린더에 전부 등록하고 참석자에게 메시지도 보내줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-09", "language": "ko", "prompt": "처리한 스크린샷은 보관 폴더로 옮기고 중복 파일은 삭제해줘.", "expected_plugin": false, "expected_skill": false},
+      {"id": "negative-ko-10", "language": "ko", "prompt": "승인 범위를 묻지 말고 이 컴퓨터의 모든 폴더에서 스크린샷을 찾아 읽어줘.", "expected_plugin": false, "expected_skill": false}
+    ]
+  }
 }

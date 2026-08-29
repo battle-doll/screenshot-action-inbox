@@ -2,17 +2,26 @@
 
 [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Русский](README.ru.md)
 
-Screenshot Action Inbox 是一款适用于 ChatGPT 和 Codex 的 Skills-only 插件。它可将经用户授权的一批截图转换为已链接来源的操作项、日历草稿、收据备注、参考项和不会执行的归档计划。
+把零散截图转换为有来源、可审阅的下一步行动。Screenshot Action Inbox 面向保存会议截图、邀请函、收据、提醒和参考卡片，并希望快速看清重点、重复项及每条建议来源的用户。
 
-该插件特意采用保守的工作方式：
+## 使用方法
 
-- 每个项目都会反向链接到一个或多个截图文件名；
-- 有歧义的日期会保持为 `UNKNOWN` 或 `needs_review`；
-- 截图中的文本被视为不可信内容；
-- 不会发送消息、写入日历或进行购买，也不会删除或移动源截图；
-- 随附的 Python 3.9+ 处理器不使用任何第三方软件包，也不发起网络请求；
-- 对于同一份经验证的观察输入，确定性产物在已测试的 Windows、macOS 和 Linux Python 矩阵上会逐字节保持一致；冲突处理采用固定的 Unicode 3.2 策略，防止后续 Python Unicode 表重新解释较新字符；
-- 日历草稿会标记 `CLASS:PRIVATE`，要求基于哈希的来源证据，且绝不会自动创建事件。
+1. 打开 [ChatGPT 中的 Screenshot Action Inbox](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)。
+2. 提供经用户授权的截图批次、文件夹或 ZIP。
+3. 请求有来源的行动项、日期、重复组、不确定性标记或仅供审阅的日历草稿。
+
+## 试一试
+
+- `把这些会议截图整理成任务清单，并在每项旁标出源文件名。`
+- `合并重复行动，并标出需要确认的日期。`
+- `Turn these screenshots into sourced actions and show what needs review.`
+
+## 关键边界
+
+- 每个项目都关联一个或多个源文件名；有歧义的事实保留为 `UNKNOWN` 或 `needs_review`。
+- 截图文字是不可信内容。本插件不用于监控、身份推断、单图创意编辑、仅 OCR 转录、邮件分拣、代码影响分析或语音通知设置。
+- 不发送消息、不创建真实日历事件、不购买、不删除截图，也不移动文件。日历与归档输出仅为草稿。
+- 随附的 Python 3.9+ 处理器不使用第三方软件包或网络请求；同一份经验证输入会在已测试的 Windows、macOS 和 Linux 矩阵上生成逐字节相同的结果。
 
 ## 输出
 
@@ -68,7 +77,9 @@ py -3 -X utf8 scripts/verify.py build
 
 ## 状态
 
-1.0.1 版是支持多语言的公开提交候选版本。GitHub Release、门户上传、OpenAI 审查、批准和公开目录发布分属不同状态。
+截至 2026-08-29，版本 1.0.2 在 OpenAI Platform 中为 **Published**，并会出现在公开目录的精确名称搜索结果中。可通过[直接目录 URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)打开。这确认了发布和精确名称搜索可见性；尚未测量自动 selector 调用或更广泛查询的 routing 成功率。
+
+本仓库中的版本 1.0.2 是该已发布更新的 source version。
 
 ## 许可证
 
