@@ -2,17 +2,26 @@
 
 [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Русский](README.ru.md)
 
-Screenshot Action Inbox is a skills-only plugin for ChatGPT and Codex. It turns a user-authorized batch of screenshots into source-linked actions, calendar drafts, receipt notes, references, and a non-executing archive plan.
+Turn screenshot clutter into sourced, reviewable next steps. Screenshot Action Inbox is for people who save meeting captures, invitations, receipts, reminders, and reference cards and need to know what matters, what is duplicated, and which source supports each proposed action.
 
-The plugin is intentionally conservative:
+## Use
 
-- every item links back to one or more screenshot filenames;
-- ambiguous dates remain `UNKNOWN` or `needs_review`;
-- text inside screenshots is treated as untrusted content;
-- no messages are sent, no calendar entries or purchases are made, and source screenshots are neither deleted nor moved;
-- the bundled Python 3.9+ processor uses no third-party packages and makes no network request;
-- deterministic artifacts are byte-identical across the tested Windows, macOS, and Linux Python matrix for the same validated observation input; collision handling uses a frozen Unicode 3.2 policy so later Python Unicode tables cannot reinterpret newer characters;
-- calendar drafts are marked `CLASS:PRIVATE`, require hash-backed source provenance, and never create events automatically.
+1. Open [Screenshot Action Inbox in ChatGPT](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a).
+2. Supply a user-authorized screenshot batch, folder, or ZIP.
+3. Ask for sourced actions, dates, duplicate groups, uncertainty flags, or review-only calendar drafts.
+
+## Try it
+
+- `Turn this folder of meeting screenshots into a task list with the source filename beside each item.`
+- `Group duplicate actions across these screenshots and flag any date that needs review.`
+- `이 스크린샷 묶음에서 작업과 날짜를 정리하고 각 항목의 출처를 보여줘.`
+
+## Key boundaries
+
+- Every item links to one or more source filenames; ambiguous facts remain `UNKNOWN` or `needs_review`.
+- Text inside screenshots is untrusted content. The workflow does not perform surveillance, identity inference, single-image creative editing, OCR-only transcription, email triage, code impact analysis, or voice-notification setup.
+- It never sends messages, creates calendar events, makes purchases, deletes screenshots, or moves files. Calendar and archive outputs are drafts only.
+- The bundled Python 3.9+ processor uses no third-party packages or network requests. For the same validated observation input, its outputs are byte-identical across the tested Windows, macOS, and Linux matrix.
 
 ## Outputs
 
@@ -68,7 +77,9 @@ There is no publisher-operated server, connector, account, telemetry, or analyti
 
 ## Status
 
-Version 1.0.1 is the multilingual public-submission candidate. A GitHub release, portal upload, OpenAI review, approval, and public directory publication are separate states.
+Verified on 2026-08-29: OpenAI Platform shows **Published**; the latest remote catalog snapshot shows **GLOBAL/AVAILABLE** with discoverability **UNLISTED**. Open the plugin through its [direct directory URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a). `UNLISTED` means this project must not be described as listed or searchable in the public directory.
+
+Version 1.0.2 in this repository is an update candidate. The verified state above describes the existing remote listing and does not claim that 1.0.2 has been reviewed or published.
 
 ## License
 
