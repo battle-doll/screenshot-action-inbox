@@ -702,6 +702,16 @@ class MetadataTests(unittest.TestCase):
         empty_expected = copy.deepcopy(cases)
         empty_expected["negative"][0]["expected"] = []
         mutations.append(empty_expected)
+        missing_direct = copy.deepcopy(cases)
+        missing_direct["discovery"]["direct"].pop()
+        mutations.append(missing_direct)
+        wrong_selection = copy.deepcopy(cases)
+        wrong_selection["discovery"]["negative"][0]["expected_plugin"] = True
+        mutations.append(wrong_selection)
+        missing_language = copy.deepcopy(cases)
+        for case in missing_language["discovery"]["indirect"]:
+            case["language"] = "en"
+        mutations.append(missing_language)
         for value in mutations:
             with self.subTest(value=value):
                 with self.assertRaises(verify.VerifyError):
