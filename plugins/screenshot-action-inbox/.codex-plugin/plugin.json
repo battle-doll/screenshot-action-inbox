@@ -1,7 +1,7 @@
 {
   "name": "screenshot-action-inbox",
-  "version": "1.0.1",
-  "description": "Turn screenshot batches into a source-linked action inbox and reviewable calendar drafts.",
+  "version": "1.0.2",
+  "description": "Organize authorized screenshot batches into source-linked actions, duplicate groups, uncertainty flags, and review-only calendar drafts.",
   "author": {
     "name": "battle-doll",
     "url": "https://github.com/battle-doll"
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "Screenshot Action Inbox",
     "shortDescription": "Turn screenshots into actions",
-    "longDescription": "Turn batches of user-provided screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; tie every item to its source screenshot; group duplicates; mark uncertainty; and draft calendar-ready entries. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its dependency-free build and validation commands consume structured observations and write deterministic local reports for review; optional authorized inventory reads image bytes only when SHA-256 hashing is explicitly requested.",
+    "longDescription": "Organize a user-authorized batch, folder, or ZIP of screenshots into a reviewable action inbox. Extract candidate tasks, dates, events, receipts, and references; preserve source filenames; group duplicates; surface uncertainty; and prepare calendar-ready drafts. Use it when screenshot clutter needs sourced next steps, not for single-image creative edits, OCR-only transcription, email triage, surveillance, identity inference, code architecture analysis, or voice notifications. The plugin never creates calendar events, sends messages, deletes screenshots, or moves files. Its dependency-free processor writes deterministic local review artifacts and makes no network request; optional authorized inventory reads image bytes only when SHA-256 hashing is explicitly requested.",
     "developerName": "battle-doll",
     "category": "Productivity",
     "capabilities": [
@@ -35,9 +35,9 @@
     "privacyPolicyURL": "https://github.com/battle-doll/screenshot-action-inbox/blob/main/PRIVACY.md",
     "termsOfServiceURL": "https://github.com/battle-doll/screenshot-action-inbox/blob/main/TERMS.md",
     "defaultPrompt": [
-      "Turn these screenshots into a sourced action inbox and flag anything uncertain.",
-      "Extract tasks and dates, group duplicates, and draft calendar entries for review.",
-      "Prioritize this screenshot batch and show the source for every proposed action."
+      "Turn these screenshots into sourced tasks, dates, and review-only calendar drafts.",
+      "I have a folder of screenshots—group duplicate actions and flag anything unclear.",
+      "Review this screenshot ZIP and show which source supports every proposed action."
     ],
     "brandColor": "#27277A",
     "composerIcon": "./assets/icon.png",

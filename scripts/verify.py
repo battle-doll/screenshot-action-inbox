@@ -29,8 +29,8 @@ MANIFEST_PATH = PLUGIN_ROOT / ".codex-plugin" / "plugin.json"
 SKILL_ROOT = PLUGIN_ROOT / "skills" / "organize-screenshot-inbox"
 PROCESSOR = SKILL_ROOT / "scripts" / "screenshot_inbox.py"
 OBSERVATIONS_PATH = ROOT / "tests" / "fixtures" / "observations.json"
-EXPECTED_PROCESSOR_SHA256 = "abe68b592a4deb9a7c4ed844d9a84fbfde67f44b293625b7e1ffe286e896fd30"
-VERSION = "1.0.1"
+EXPECTED_PROCESSOR_SHA256 = "5af45d91b578155dd05df65500ba918bca44010a214c4629fa251635d861001e"
+VERSION = "1.0.2"
 PACKAGE_NAME = "screenshot-action-inbox"
 ARCHIVE_NAME = "%s-skills-only-%s.zip" % (PACKAGE_NAME, VERSION)
 DIST = ROOT / "dist"
@@ -1473,7 +1473,7 @@ def validate_source(source_entries=None):
     changelog = _read_regular_bytes(
         ROOT / "CHANGELOG.md", 2 * 1024 * 1024, boundary=ROOT
     ).decode("utf-8")
-    if "## %s - 2026-08-15" % VERSION not in changelog:
+    if "## %s - 2026-08-29" % VERSION not in changelog:
         fail("changelog does not contain the current version and date")
     if manifest["homepage"] != "https://github.com/battle-doll/screenshot-action-inbox#readme":
         fail("homepage metadata is unexpected")
