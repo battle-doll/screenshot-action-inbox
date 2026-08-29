@@ -77,9 +77,9 @@ py -3 -X utf8 scripts/verify.py build
 
 ## 상태
 
-2026-08-29 확인 결과 OpenAI Platform 상태는 **Published**이고, 최신 원격 카탈로그 스냅샷은 **GLOBAL/AVAILABLE**, 발견 가능성은 **UNLISTED**입니다. [직접 디렉터리 URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)로 열 수 있습니다. `UNLISTED`이므로 공개 디렉터리에 나열되거나 검색 가능하다고 표현해서는 안 됩니다.
+2026-08-29 확인 결과 버전 1.0.2는 OpenAI Platform에서 **Published** 상태이며, 공개 디렉터리의 정확한 이름 검색 결과에 표시됩니다. [직접 디렉터리 URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)로 열 수 있습니다. 이는 게시와 정확한 이름 검색 노출을 확인한 것이며, 자동 selector 호출이나 더 넓은 질의의 routing 성공률은 측정하지 않았습니다.
 
-이 저장소의 1.0.2는 업데이트 후보입니다. 위 상태는 현재 원격 등록을 설명하며 1.0.2가 검토 또는 게시되었다는 뜻이 아닙니다.
+이 저장소의 버전 1.0.2는 해당 게시 업데이트의 source version입니다.
 
 ## 라이선스
 

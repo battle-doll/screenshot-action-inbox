@@ -2,11 +2,11 @@
 
 ## Current publication state
 
-Verified on 2026-08-29: OpenAI Platform shows **Published**; the latest remote catalog snapshot shows **GLOBAL/AVAILABLE** with discoverability **UNLISTED**.
+Verified on 2026-08-29: version 1.0.2 is **Published** in OpenAI Platform and appears as a public result in exact-name directory search.
 
 - Directory URL: <https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a>
-- `UNLISTED` does not mean listed or searchable in the public directory.
-- Version 1.0.2 in this repository is an update candidate. The verified state above describes the existing remote listing and does not claim that 1.0.2 has been uploaded, reviewed, approved, or published.
+- Publication and exact-name search visibility are confirmed; automatic selector invocation and broader-query routing have not been measured.
+- Version 1.0.2 in this repository is the source version for that published update.
 
 ## Listing
 
@@ -17,7 +17,7 @@ Verified on 2026-08-29: OpenAI Platform shows **Published**; the latest remote c
 - Category: Productivity
 - Submission type: Skills only
 - Authentication: None
-- Current availability: Global and available, with discoverability unlisted, as verified on 2026-08-29
+- Current availability: Published and visible through exact-name public directory search, as verified on 2026-08-29
 - Listing language: English
 - Documentation languages: English, Korean, Japanese, Simplified Chinese, and Russian
 - Tested content and filenames: English and Korean; processor supports UTF-8 generally
@@ -75,7 +75,7 @@ Release gates:
 - identical hashes and byte lengths for all five runtime artifacts across the ten-job CI matrix;
 - exact Skills-only profile with no MCP, app, hook, or screenshot configuration.
 
-Upload `dist/screenshot-action-inbox-skills-only-1.0.2.zip` only after the aggregate CI job passes for the exact commit being submitted. Never rebuild, replace, or relabel the published 1.0.1 artifacts.
+Preserve already-published 1.0.1 and 1.0.2 artifacts and their recorded checksums. Never rebuild, replace, or relabel them as the original published artifacts.
 
 ## Review cases
 
@@ -95,7 +95,7 @@ All fixtures are synthetic and sanitized. Reviewer-case outputs require source f
 8. Select **Submit for review**.
 9. Wait for OpenAI review and approval.
 10. After approval, separately select **Publish**.
-11. Confirm the updated version through the exact listing name and direct directory URL without claiming listed or searchable discoverability.
+11. Confirm the published version through the exact listing name, version detail, and direct directory URL; record exact-name search visibility separately from unmeasured selector invocation.
 
 Draft creation, ZIP upload, completed skill scans, review submission, approval, publication, and enhanced directory placement are distinct states.
 

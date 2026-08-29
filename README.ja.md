@@ -77,9 +77,9 @@ py -3 -X utf8 scripts/verify.py build
 
 ## ステータス
 
-2026-08-29 の確認では、OpenAI Platform は **Published**、最新のリモートカタログスナップショットは **GLOBAL/AVAILABLE**、discoverability は **UNLISTED** です。[直接ディレクトリ URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)から開けます。`UNLISTED` のため、公開ディレクトリに掲載済みまたは検索可能とは表現しません。
+2026-08-29 の確認では、バージョン 1.0.2 は OpenAI Platform で **Published** となり、公開ディレクトリの完全一致名検索結果に表示されます。[直接ディレクトリ URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)から開けます。これは公開と完全一致名での検索表示を確認したものであり、自動 selector 呼び出しや、より広いクエリでの routing 成功率は測定していません。
 
-このリポジトリの 1.0.2 は更新候補です。上記は既存のリモート登録状態であり、1.0.2 がレビューまたは公開済みであることを意味しません。
+このリポジトリのバージョン 1.0.2 は、その公開済みアップデートの source version です。
 
 ## ライセンス
 

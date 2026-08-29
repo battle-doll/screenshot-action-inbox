@@ -5,7 +5,7 @@
 - Clarify direct, indirect, and negative discovery boundaries in plugin and skill metadata without changing permissions or runtime behavior.
 - Put the user problem, direct-use path, starter requests, and key safety boundaries at the top of all five README variants.
 - Add a bilingual 10 direct, 20 indirect, and 20 negative discovery golden set with validator coverage, including boundaries with code ontology and voice-notification workflows.
-- Record the verified Published, GLOBAL/AVAILABLE, and UNLISTED catalog state without claiming directory listing or searchability.
+- Record the published 1.0.2 state and exact-name public directory visibility without claiming measured automatic selector routing.
 
 ## 1.0.1 - 2026-08-15
 
