@@ -77,9 +77,9 @@ There is no publisher-operated server, connector, account, telemetry, or analyti
 
 ## Status
 
-Verified on 2026-08-29: OpenAI Platform shows **Published**; the latest remote catalog snapshot shows **GLOBAL/AVAILABLE** with discoverability **UNLISTED**. Open the plugin through its [direct directory URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a). `UNLISTED` means this project must not be described as listed or searchable in the public directory.
+Verified on 2026-08-29: version 1.0.2 is **Published** in OpenAI Platform and appears as a public result in exact-name directory search. Open the plugin through its [direct directory URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a). This confirms publication and exact-name search visibility; automatic selector invocation and broader-query routing have not been measured.
 
-Version 1.0.2 in this repository is an update candidate. The verified state above describes the existing remote listing and does not claim that 1.0.2 has been reviewed or published.
+Version 1.0.2 in this repository is the source version for that published update.
 
 ## License
 

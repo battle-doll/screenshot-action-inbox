@@ -77,9 +77,9 @@ py -3 -X utf8 scripts/verify.py build
 
 ## 状态
 
-截至 2026-08-29，OpenAI Platform 显示 **Published**；最新远程目录快照显示 **GLOBAL/AVAILABLE**，discoverability 为 **UNLISTED**。可通过[直接目录 URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)打开。由于是 `UNLISTED`，不得声称它已列入公开目录或可被搜索发现。
+截至 2026-08-29，版本 1.0.2 在 OpenAI Platform 中为 **Published**，并会出现在公开目录的精确名称搜索结果中。可通过[直接目录 URL](https://chatgpt.com/plugins/plugins_6a7cbf30f0208191b29866d20a69743a)打开。这确认了发布和精确名称搜索可见性；尚未测量自动 selector 调用或更广泛查询的 routing 成功率。
 
-本仓库中的 1.0.2 是更新候选版本。上述状态描述现有远程条目，并不表示 1.0.2 已通过审查或发布。
+本仓库中的版本 1.0.2 是该已发布更新的 source version。
 
 ## 许可证
 
